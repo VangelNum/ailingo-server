@@ -3,4 +3,4 @@ build:
 
 run:
   image: vangelnum/ailingo:latest
-  containerPort: 8080 
+  containerPort: 8080
