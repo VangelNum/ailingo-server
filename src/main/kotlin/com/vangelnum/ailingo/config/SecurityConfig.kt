@@ -57,7 +57,8 @@ class SecurityConfig(
             "http://localhost:8080",
             "https://localhost:8080",
             "https://vangelnum.github.io",
-            "https://ailingo-vangel.amvera.io"
+            "https://ailingo-vangel.amvera.io",
+            "https://ailingo.netlify.app"
         )
         configuration.allowedMethods = listOf(
             "GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"
