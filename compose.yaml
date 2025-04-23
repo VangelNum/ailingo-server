@@ -1,0 +1,12 @@
+name: ailingo-local
+
+services:
+  db:
+    image: postgres:16
+    container_name: ailingo_db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=ailingo
+      - POSTGRES_PASSWORD=ailingo
+    ports:
+      - "5432:5432"

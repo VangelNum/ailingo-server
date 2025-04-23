@@ -1,0 +1,6 @@
+build:
+  skip: yes
+
+run:
+  image: vangelnum/ailingo:latest
+  containerPort: 8080 
