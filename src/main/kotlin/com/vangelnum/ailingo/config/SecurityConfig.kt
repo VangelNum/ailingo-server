@@ -13,6 +13,9 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.web.cors.CorsConfiguration
+import org.springframework.web.cors.CorsConfigurationSource
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 
 @Configuration
 @EnableWebSecurity
@@ -26,34 +29,54 @@ class SecurityConfig(
     @Bean
     fun userDetailsService(): UserDetailsService {
         return UserDetailsService { username ->
-            val user = userRepository.findByEmail(username).orElse(null)
-
-            if (user == null) {
-                val userByName = userRepository.findByName(username).orElse(null)
-                    ?: throw UsernameNotFoundException("User not found with username or email: $username")
-
-                userByName.let {
-                    User(
-                        it.email,
-                        it.password,
-                        listOf(GrantedAuthority { "ROLE_${it.role}" })
-                    )
-                }
-            } else {
-                user.let {
-                    User(
-                        it.email,
-                        it.password,
-                        listOf(GrantedAuthority { "ROLE_${it.role}" })
-                    )
-                }
+            val userByEmail = userRepository.findByEmail(username).orElse(null)
+            if (userByEmail != null) {
+                return@UserDetailsService User(
+                    userByEmail.email,
+                    userByEmail.password,
+                    listOf(GrantedAuthority { "ROLE_${userByEmail.role}" })
+                )
             }
+
+            val userByName = userRepository.findByName(username).orElseThrow {
+                UsernameNotFoundException("User not found with username or email: $username")
+            }
+
+            User(
+                userByName.email,
+                userByName.password,
+                listOf(GrantedAuthority { "ROLE_${userByName.role}" })
+            )
         }
+    }
+
+    @Bean
+    fun corsConfigurationSource(): CorsConfigurationSource {
+        val configuration = CorsConfiguration()
+        configuration.allowedOrigins = listOf(
+            "http://localhost:8080",
+            "https://localhost:8080",
+            "https://vangelnum.github.io",
+            "https://ailingo-vangel.amvera.io"
+        )
+        configuration.allowedMethods = listOf(
+            "GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"
+        )
+        configuration.allowedHeaders = listOf(
+            "Authorization", "Cache-Control", "Content-Type", "Accept"
+        )
+        configuration.allowCredentials = true
+        configuration.maxAge = 3600L
+
+        val source = UrlBasedCorsConfigurationSource()
+        source.registerCorsConfiguration("/api/v1/**", configuration)
+        return source
     }
 
     @Bean
     fun filterChain(http: HttpSecurity): SecurityFilterChain {
         http
+            .cors { cors -> cors.configurationSource(corsConfigurationSource()) }
             .csrf { it.disable() }
             .authorizeHttpRequests { auth ->
                 auth
@@ -69,6 +92,7 @@ class SecurityConfig(
                     .anyRequest().authenticated()
             }
             .httpBasic {}
+
         return http.build()
     }
 }
