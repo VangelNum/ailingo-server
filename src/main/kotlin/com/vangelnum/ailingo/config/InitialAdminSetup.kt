@@ -29,7 +29,7 @@ class InitialAdminSetup(
                 isEmailVerified = true,
                 verificationCode = null,
                 registrationTime = LocalDateTime.now(),
-                lastLoginTime = null,
+                lastLoginTime = LocalDateTime.now(),
                 streak = 0,
                 xp = 0
             )

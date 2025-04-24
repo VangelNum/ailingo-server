@@ -29,24 +29,14 @@ class SecurityConfig(
     @Bean
     fun userDetailsService(): UserDetailsService {
         return UserDetailsService { username ->
-            val userByEmail = userRepository.findByEmail(username).orElse(null)
-            if (userByEmail != null) {
-                return@UserDetailsService User(
-                    userByEmail.email,
-                    userByEmail.password,
-                    listOf(GrantedAuthority { "ROLE_${userByEmail.role}" })
+            val user = userRepository.findByEmail(username).orElse(null) ?: throw UsernameNotFoundException("User not found with email: $username")
+            user.let {
+                User(
+                    it.email,
+                    it.password,
+                    listOf(GrantedAuthority { "ROLE_${it.role}" })
                 )
             }
-
-            val userByName = userRepository.findByName(username).orElseThrow {
-                UsernameNotFoundException("User not found with username or email: $username")
-            }
-
-            User(
-                userByName.email,
-                userByName.password,
-                listOf(GrantedAuthority { "ROLE_${userByName.role}" })
-            )
         }
     }
 
