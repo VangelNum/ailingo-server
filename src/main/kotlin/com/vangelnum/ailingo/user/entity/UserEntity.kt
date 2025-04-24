@@ -8,7 +8,6 @@ import jakarta.persistence.Enumerated
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
-import jakarta.persistence.Lob
 import jakarta.persistence.Table
 import java.time.LocalDateTime
 
@@ -28,8 +27,7 @@ data class UserEntity(
     @Column(nullable = false, unique = true)
     val email: String,
 
-    @Lob
-    @Column
+    @Column(columnDefinition = "TEXT")
     var avatar: String? = null,
 
     @Enumerated(EnumType.STRING)
