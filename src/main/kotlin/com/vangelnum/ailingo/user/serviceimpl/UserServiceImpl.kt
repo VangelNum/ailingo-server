@@ -17,6 +17,8 @@ import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.net.MalformedURLException
+import java.net.URL
 import java.time.LocalDateTime
 import java.util.Random
 
@@ -146,16 +148,14 @@ class UserServiceImpl(
     }
 
     override fun updateUserAvatar(avatar: String): UserEntity {
-        val authentication = SecurityContextHolder.getContext().authentication
-        val email = authentication.name
-        val checkStatus = userValidator.checkAvatarUrl(avatar)
-        if (!checkStatus.isSuccess) {
-            throw IllegalArgumentException(checkStatus.message)
+        try {
+            URL(avatar)
+        } catch (e: MalformedURLException) {
+            throw IllegalArgumentException("Некорректный URL аватара")
         }
-        val existingUser = userRepository.findByEmail(email)
-            .orElseThrow { NoSuchElementException("Пользователь не найден") }
-        val updatedUser = existingUser.copy(avatar = avatar)
-        return userRepository.save(updatedUser)
+        val user = getCurrentUser()
+        user.avatar = avatar
+        return userRepository.save(user)
     }
 
     override fun getCurrentUser(): UserEntity {
