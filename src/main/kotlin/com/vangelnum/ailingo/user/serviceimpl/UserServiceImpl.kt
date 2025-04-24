@@ -95,6 +95,7 @@ class UserServiceImpl(
                 coins = 100,
                 isEmailVerified = true,
                 verificationCode = null,
+                lastLoginTime = LocalDateTime.now(),
                 registrationTime = LocalDateTime.now(),
                 streak = 0,
                 xp = 0
