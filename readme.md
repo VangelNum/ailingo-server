@@ -4,7 +4,7 @@
 
 Данные для входа
 ```
-Логин: admin
+Почта: admin@gmail.com
 Пароль: password
 ```
 
