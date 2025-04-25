@@ -17,13 +17,11 @@ public interface MessageHistoryRepository extends JpaRepository<HistoryMessageEn
 
     List<HistoryMessageEntity> findByConversationIdAndOwnerOrderByTimestamp(UUID id, UserEntity owner);
 
-    @Query("SELECT h.conversationId as conversationId, " +
-            "       t.name as topicName, " +
-            "       MIN(h.timestamp) as creationTimestamp " +
+    @Query("SELECT NEW com.vangelnum.ailingo.chat.dto.ConversationSummaryDto(h.conversationId, t.name, MIN(h.timestamp)) " +
             "FROM HistoryMessageEntity h JOIN h.topic t " +
             "WHERE h.owner = :owner " +
             "GROUP BY h.conversationId, t.name " +
-            "ORDER BY creationTimestamp DESC")
+            "ORDER BY MIN(h.timestamp) DESC")
     List<ConversationSummaryDto> findAllByOwner(UserEntity owner);
 
     Boolean existsByTopicAndOwnerAndType(TopicEntity topic, UserEntity owner, MessageType type);
