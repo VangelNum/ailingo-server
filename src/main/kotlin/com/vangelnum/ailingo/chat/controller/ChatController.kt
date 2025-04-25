@@ -1,6 +1,6 @@
 package com.vangelnum.ailingo.chat.controller
 
-import com.vangelnum.ailingo.chat.dto.ConversationSummaryDto
+import com.vangelnum.ailingo.chat.dto.ConversationDto
 import com.vangelnum.ailingo.chat.model.ConversationMessage
 import com.vangelnum.ailingo.chat.service.ChatService
 import com.vangelnum.ailingo.core.InvalidRequestException
@@ -21,7 +21,7 @@ class ChatController(
     private val chatService: ChatService
 ) {
     @GetMapping
-    fun getUserConversation(): List<ConversationSummaryDto> {
+    fun getUserConversation(): List<ConversationDto> {
         return chatService.getConversations()
     }
 

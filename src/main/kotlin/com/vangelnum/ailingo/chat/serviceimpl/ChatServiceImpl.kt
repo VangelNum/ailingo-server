@@ -1,6 +1,6 @@
 package com.vangelnum.ailingo.chat.serviceimpl
 
-import com.vangelnum.ailingo.chat.dto.ConversationSummaryDto
+import com.vangelnum.ailingo.chat.dto.ConversationDto
 import com.vangelnum.ailingo.chat.entity.HistoryMessageEntity
 import com.vangelnum.ailingo.chat.model.ConversationMessage
 import com.vangelnum.ailingo.chat.model.MessageType
@@ -133,7 +133,7 @@ class ChatServiceImpl(
         return messages.map { mapHistoryMessageEntityToConversationMessageDto(it) }
     }
 
-    override fun getConversations(): MutableList<ConversationSummaryDto> {
+    override fun getConversations(): MutableList<ConversationDto> {
         return historyRepository.findAllByOwner(userService.getCurrentUser())
     }
 
