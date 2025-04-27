@@ -12,6 +12,7 @@ import com.vangelnum.ailingo.user.service.UserService
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 @Service
 class TopicServiceImpl(
@@ -23,7 +24,8 @@ class TopicServiceImpl(
         val currentUser = userService.getCurrentUser()
 
         return topicRepository.findAll().map { topicEntity ->
-            val isCompleted = historyRepository.existsByTopicAndOwnerAndType(topicEntity, currentUser, MessageType.FINAL)
+            val isCompleted =
+                historyRepository.existsByTopicAndOwnerAndType(topicEntity, currentUser, MessageType.FINAL)
 
             TopicResponseDTO(
                 id = topicEntity.id,
@@ -90,20 +92,28 @@ class TopicServiceImpl(
     }
 
     @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @Transactional
     override fun deleteTopicByName(name: String) {
+        val topicToDelete = topicRepository.findByName(name)
+            .orElseThrow { IllegalArgumentException("Топик с именем '$name' не найден") }
+        historyRepository.deleteAllByTopicId(topicToDelete.id)
         topicRepository.deleteTopicByName(name)
     }
 
     @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @Transactional
     override fun deleteTopicById(id: Long) {
         if (!topicRepository.existsById(id)) {
             throw IllegalArgumentException("Топик с id $id не найден")
         }
+        historyRepository.deleteAllByTopicId(id)
         topicRepository.deleteById(id)
     }
 
     @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @Transactional
     override fun deleteAllTopic() {
+        historyRepository.deleteAll()
         topicRepository.deleteAll()
     }
 }
