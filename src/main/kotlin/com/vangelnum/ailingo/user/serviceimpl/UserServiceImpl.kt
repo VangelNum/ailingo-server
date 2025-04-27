@@ -1,9 +1,11 @@
 package com.vangelnum.ailingo.user.serviceimpl
 
+import com.vangelnum.ailingo.chat.repository.MessageHistoryRepository
 import com.vangelnum.ailingo.core.GlobalExceptionHandler
 import com.vangelnum.ailingo.core.enums.Role
 import com.vangelnum.ailingo.core.utils.getCurrentUserEmail
 import com.vangelnum.ailingo.core.validator.UserValidator
+import com.vangelnum.ailingo.favouritewords.repository.FavoriteWordsRepository
 import com.vangelnum.ailingo.pendinguser.entity.PendingUser
 import com.vangelnum.ailingo.pendinguser.repository.PendingUserRepository
 import com.vangelnum.ailingo.user.entity.UserEntity
@@ -28,7 +30,9 @@ class UserServiceImpl(
     private val pendingUserRepository: PendingUserRepository,
     private val passwordEncoder: PasswordEncoder,
     private val userValidator: UserValidator,
-    private val emailService: EmailService
+    private val emailService: EmailService,
+    private val messageHistoryRepository: MessageHistoryRepository,
+    private val favoriteWordsRepository: FavoriteWordsRepository
 ) : UserService {
 
     @Transactional
@@ -222,6 +226,8 @@ class UserServiceImpl(
         if (!userRepository.existsById(id)) {
             throw EntityNotFoundException("Пользователь с id $id не найден")
         }
+        favoriteWordsRepository.deleteAllByUserId(id)
+        messageHistoryRepository.deleteAllByOwnerId(id)
         userRepository.deleteById(id)
     }
 }
