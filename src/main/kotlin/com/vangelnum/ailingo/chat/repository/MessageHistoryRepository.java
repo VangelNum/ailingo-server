@@ -27,5 +27,5 @@ public interface MessageHistoryRepository extends JpaRepository<HistoryMessageEn
     List<ConversationDto> findAllByOwner(UserEntity owner);
 
     Boolean existsByTopicAndOwnerAndType(TopicEntity topic, UserEntity owner, MessageType type);
-    Void deleteAllByOwnerId(Long ownerId);
+    int deleteAllByOwnerId(Long ownerId);
 }
