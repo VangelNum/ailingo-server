@@ -19,10 +19,12 @@ public interface MessageHistoryRepository extends JpaRepository<HistoryMessageEn
 
     @Query("SELECT h.conversationId as conversationId, " +
             "       t.name as topicName, " +
-            "       MIN(h.timestamp) as creationTimestamp " +
+            "       t.image as topicImage, " +
+            "       MIN(h.timestamp) as creationTimestamp, " +
+            "       MAX(CASE WHEN h.type = 'FINAL' THEN 1 ELSE 0 END) as isFinished " +
             "FROM HistoryMessageEntity h JOIN h.topic t " +
             "WHERE h.owner = :owner " +
-            "GROUP BY h.conversationId, t.name " +
+            "GROUP BY h.conversationId, t.name, t.image " +
             "ORDER BY creationTimestamp DESC")
     List<ConversationDto> findAllByOwner(UserEntity owner);
 

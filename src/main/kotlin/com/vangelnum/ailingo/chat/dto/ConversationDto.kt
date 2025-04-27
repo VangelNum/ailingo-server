@@ -7,4 +7,6 @@ interface ConversationDto {
     val conversationId: UUID
     val topicName: String
     val creationTimestamp: Instant
+    val topicImage: String
+    val isFinished: Boolean
 }
