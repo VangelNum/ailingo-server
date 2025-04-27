@@ -1,7 +1,7 @@
 package com.vangelnum.ailingo.chat.controller
 
-import com.vangelnum.ailingo.chat.dto.ConversationDto
 import com.vangelnum.ailingo.chat.model.ConversationMessage
+import com.vangelnum.ailingo.chat.model.ConversationSummary
 import com.vangelnum.ailingo.chat.service.ChatService
 import com.vangelnum.ailingo.core.InvalidRequestException
 import io.swagger.v3.oas.annotations.Operation
@@ -20,10 +20,6 @@ import java.util.UUID
 class ChatController(
     private val chatService: ChatService
 ) {
-    @GetMapping
-    fun getUserConversation(): List<ConversationDto> {
-        return chatService.getConversations()
-    }
 
     @PostMapping("/{topicName}")
     fun startConversation(@PathVariable topicName: String): ConversationMessage {
@@ -47,5 +43,11 @@ class ChatController(
     @PostMapping("/continue/{conversationId}")
     fun continueDialog(@PathVariable conversationId: String, @RequestBody userInput: String): ConversationMessage {
         return chatService.continueDialog(UUID.fromString(conversationId), userInput)
+    }
+
+    @Operation(summary = "Получить список чатов")
+    @GetMapping("/all")
+    fun getConversations(): List<ConversationSummary> {
+        return chatService.getConversations()
     }
 }

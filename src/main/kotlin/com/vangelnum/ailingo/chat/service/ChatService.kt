@@ -1,7 +1,7 @@
 package com.vangelnum.ailingo.chat.service
 
-import com.vangelnum.ailingo.chat.dto.ConversationDto
 import com.vangelnum.ailingo.chat.model.ConversationMessage
+import com.vangelnum.ailingo.chat.model.ConversationSummary
 import java.util.UUID
 
 interface ChatService {
@@ -12,5 +12,5 @@ interface ChatService {
 
     fun getMessages(chatId: UUID): List<ConversationMessage>
 
-    fun getConversations(): List<ConversationDto>
+    fun getConversations(): List<ConversationSummary>
 }

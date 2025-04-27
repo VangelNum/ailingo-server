@@ -1,8 +1,8 @@
 package com.vangelnum.ailingo.chat.serviceimpl
 
-import com.vangelnum.ailingo.chat.dto.ConversationDto
 import com.vangelnum.ailingo.chat.entity.HistoryMessageEntity
 import com.vangelnum.ailingo.chat.model.ConversationMessage
+import com.vangelnum.ailingo.chat.model.ConversationSummary
 import com.vangelnum.ailingo.chat.model.MessageType
 import com.vangelnum.ailingo.chat.repository.MessageHistoryRepository
 import com.vangelnum.ailingo.chat.service.ChatService
@@ -133,10 +133,6 @@ class ChatServiceImpl(
         return messages.map { mapHistoryMessageEntityToConversationMessageDto(it) }
     }
 
-    override fun getConversations(): MutableList<ConversationDto> {
-        return historyRepository.findAllByOwner(userService.getCurrentUser())
-    }
-
     private fun createMessage(
         topic: TopicEntity,
         messages: List<Message>,
@@ -222,5 +218,24 @@ class ChatServiceImpl(
             historyMessageEntity.timestamp,
             historyMessageEntity.type
         )
+    }
+
+    override fun getConversations(): List<ConversationSummary> {
+        val user = userService.getCurrentUser()
+        val latestMessages = historyRepository.findLatestMessagesByOwnerGroupedByConversationId(user)
+
+        return latestMessages.groupBy { it.conversationId }
+            .map { (_, messages) ->
+                val latestMessage = messages.maxByOrNull { it.timestamp } ?: return@map null
+                ConversationSummary(
+                    conversationId = latestMessage.conversationId.toString(),
+                    topicName = latestMessage.topic.name,
+                    topicImage = latestMessage.topic.image,
+                    lastMessageTimestamp = latestMessage.timestamp,
+                    isCompleted = messages.any { it.type == MessageType.FINAL }
+                )
+            }
+            .filterNotNull()
+            .sortedByDescending { it.lastMessageTimestamp }
     }
 }

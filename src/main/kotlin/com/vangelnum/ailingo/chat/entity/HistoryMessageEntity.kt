@@ -37,7 +37,7 @@ data class HistoryMessageEntity(
     @Enumerated(EnumType.STRING)
     var type: MessageType,
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     var content: String? = null,
 
     @Column(nullable = false)
