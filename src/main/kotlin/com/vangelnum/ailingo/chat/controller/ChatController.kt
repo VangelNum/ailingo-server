@@ -50,4 +50,14 @@ class ChatController(
     fun getConversations(): List<ConversationSummary> {
         return chatService.getConversations()
     }
+
+    @Operation(
+        summary = "Отправка пользовательского текста",
+        description = "Проверка его на грамматические ошибки"
+    )
+
+    @PostMapping
+    fun gramaticTetsForText(userInput: String?): String?{
+        return chatService.gramaticTetsForText(userInput)
+    }
 }

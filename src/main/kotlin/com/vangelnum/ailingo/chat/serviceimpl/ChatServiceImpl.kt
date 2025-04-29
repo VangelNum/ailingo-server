@@ -208,6 +208,7 @@ class ChatServiceImpl(
     companion object {
         const val STOP_CONVERSATION_PROMPT =
             "Politely inform the user that the conversation message limit for this topic has been reached and you must now conclude the discussion. Wish them well."
+        const val GRAMATIC_TEST_FOR_TEXT = "Check the user's text for grammatical mistake. If there are none, then write about it. User text: "
     }
 
     protected fun mapHistoryMessageEntityToConversationMessageDto(historyMessageEntity: HistoryMessageEntity): ConversationMessage {
@@ -237,5 +238,31 @@ class ChatServiceImpl(
             }
             .filterNotNull()
             .sortedByDescending { it.lastMessageTimestamp }
+    }
+
+    override fun gramaticTetsForText(userInput: String?): String? {
+        val chatClient = baseChatClient.mutate()
+            .defaultSystem("You are a helpful assistant.")
+            .defaultOptions(
+                DefaultChatOptionsBuilder()
+                    .maxTokens(50)
+                    .temperature(0.8)
+                    .build()
+            )
+            .build()
+        if (userInput == null){
+            throw InvalidRequestException("No user text to send.")
+        }
+        val promptToSend = Prompt(GRAMATIC_TEST_FOR_TEXT + userInput)
+
+        return try{
+            chatClient.prompt(promptToSend)
+                .call()
+                .chatResponse()
+                ?.result
+                ?.output?.text
+        } catch (e: Exception) {
+            null
+        }
     }
 }

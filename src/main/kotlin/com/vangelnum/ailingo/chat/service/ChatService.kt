@@ -13,4 +13,6 @@ interface ChatService {
     fun getMessages(chatId: UUID): List<ConversationMessage>
 
     fun getConversations(): List<ConversationSummary>
+
+    fun gramaticTetsForText(userInput: String?): String?
 }
