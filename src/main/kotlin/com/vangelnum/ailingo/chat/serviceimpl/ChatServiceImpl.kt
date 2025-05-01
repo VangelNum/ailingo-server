@@ -187,9 +187,10 @@ class ChatServiceImpl(
             .build()
 
         val suggestionPrompt = """
-            Generate 3 very short suggested replies for the user to continue the conversation.
-            Do not include any explanations or extra text.
+            Generate 3 very short suggested replies in English for the user to continue the conversation.
+            Do not include any explanations or extra text. Do not add quotes to responses.
             Example suggestions can be questions or short phrases to continue the dialog based on the last message.
+            Ensure that the generated suggestions are appropriate and relevant to the conversation topic.
             Last message was: ${conversationHistory.lastOrNull() ?: "Start of conversation"}
             Topic of conversation: ${topic.name}
             Suggestions:
@@ -353,10 +354,8 @@ class ChatServiceImpl(
             "Politely inform the user that the conversation message limit for this topic has been reached and you must now conclude the discussion. Wish them well."
 
         const val GRAMMAR_CHECK_SYSTEM_PROMPT = """
-            You are an expert grammar checker.
-            Your task is to review the following user text for grammatical errors and punctuation issues.
-            If there are no errors, respond *exactly* with: No mistakes
-            If there are errors, respond Be concise.
+            You are a helpful English grammar assistant. You will receive a sentence and your task is to correct it.
+            Return the corrected sentence with a short explanation of why this is correct. If the sentence is already correct, return No mistakes.
         """
 
         const val BASIC_GRAMMAR_PROMPT = """
