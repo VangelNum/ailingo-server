@@ -1,9 +1,14 @@
 package com.vangelnum.ailingo.chat.serviceimpl
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.vangelnum.ailingo.chat.entity.HistoryMessageEntity
+import com.vangelnum.ailingo.chat.model.AnalysisIssue
+import com.vangelnum.ailingo.chat.model.AnalysisType
 import com.vangelnum.ailingo.chat.model.ConversationMessage
 import com.vangelnum.ailingo.chat.model.ConversationSummary
 import com.vangelnum.ailingo.chat.model.MessageType
+import com.vangelnum.ailingo.chat.model.TextAnalysisResult
 import com.vangelnum.ailingo.chat.repository.MessageHistoryRepository
 import com.vangelnum.ailingo.chat.service.ChatService
 import com.vangelnum.ailingo.core.InvalidRequestException
@@ -28,7 +33,8 @@ class ChatServiceImpl(
     private val baseChatClient: ChatClient,
     private val topicRepository: TopicRepository,
     private val historyRepository: MessageHistoryRepository,
-    private val userService: UserService
+    private val userService: UserService,
+    private val objectMapper: ObjectMapper
 ) : ChatService {
     override fun startConversation(topicName: String): ConversationMessage {
         val topic: TopicEntity =
@@ -160,7 +166,6 @@ class ChatServiceImpl(
         }
     }
 
-
     private fun mapHistoryMessageToMessage(historyMessage: HistoryMessageEntity): Message {
         return when (historyMessage.type) {
             MessageType.SYSTEM -> SystemMessage(historyMessage.content ?: "")
@@ -205,12 +210,6 @@ class ChatServiceImpl(
         .temperature(0.7)
         .build()
 
-    companion object {
-        const val STOP_CONVERSATION_PROMPT =
-            "Politely inform the user that the conversation message limit for this topic has been reached and you must now conclude the discussion. Wish them well."
-        const val GRAMATIC_TEST_FOR_TEXT = "Check the user's text for grammatical mistake. If there are none, then write *No mistakes*. User text: "
-    }
-
     protected fun mapHistoryMessageEntityToConversationMessageDto(historyMessageEntity: HistoryMessageEntity): ConversationMessage {
         return ConversationMessage(
             historyMessageEntity.id?.toString() ?: "",
@@ -240,29 +239,156 @@ class ChatServiceImpl(
             .sortedByDescending { it.lastMessageTimestamp }
     }
 
-    override fun gramaticTetsForText(userInput: String?): String? {
+    override fun singleMessageCheck(userInput: String): String? {
+        if (userInput.isBlank()) {
+            throw InvalidRequestException("User text for grammar check cannot be empty.")
+        }
+
         val chatClient = baseChatClient.mutate()
-            .defaultSystem("You are a helpful assistant.")
+            .defaultSystem(GRAMMAR_CHECK_SYSTEM_PROMPT)
             .defaultOptions(
                 DefaultChatOptionsBuilder()
                     .maxTokens(200)
-                    .temperature(0.8)
+                    .temperature(0.3)
                     .build()
             )
             .build()
-        if (userInput == null){
-            throw InvalidRequestException("No user text to send.")
-        }
-        val promptToSend = Prompt(GRAMATIC_TEST_FOR_TEXT + userInput)
 
-        return try{
+        val promptToSend = Prompt(userInput)
+
+        return try {
             chatClient.prompt(promptToSend)
                 .call()
-                .chatResponse()
-                ?.result
-                ?.output?.text
+                .content()
         } catch (e: Exception) {
             null
         }
+    }
+
+
+    override fun analyzeConversationBasicGrammar(conversationId: UUID): List<TextAnalysisResult> {
+        return analyzeConversation(conversationId, BASIC_GRAMMAR_PROMPT, AnalysisType.BASIC_GRAMMAR)
+    }
+
+    override fun analyzeConversationCommonErrors(conversationId: UUID): List<TextAnalysisResult> {
+        return analyzeConversation(conversationId, COMMON_BEGINNER_ERRORS_PROMPT, AnalysisType.BEGINNER_ERRORS)
+    }
+
+    override fun analyzeConversationClarityStyle(conversationId: UUID): List<TextAnalysisResult> {
+        return analyzeConversation(conversationId, CLARITY_STYLE_PROMPT, AnalysisType.CLARITY_STYLE)
+    }
+
+    override fun analyzeConversationVocabulary(conversationId: UUID): List<TextAnalysisResult> {
+        return analyzeConversation(conversationId, VOCABULARY_PHRASING_PROMPT, AnalysisType.VOCABULARY_PHRASING)
+    }
+
+
+    private fun analyzeConversation(conversationId: UUID, systemPrompt: String, analysisType: AnalysisType): List<TextAnalysisResult> {
+        val user = userService.getCurrentUser()
+        val messages = historyRepository.findByConversationIdAndOwnerOrderByTimestamp(conversationId, user)
+
+        if (messages.isEmpty()) {
+            throw InvalidRequestException("Conversation not found.")
+        }
+
+        val userMessages = messages.filter { it.type == MessageType.USER && !it.content.isNullOrBlank() }
+
+        return userMessages.mapNotNull { message ->
+            message.content?.let { content ->
+                analyzeTextWithAI(content, systemPrompt).let { issues ->
+                    TextAnalysisResult(
+                        messageId = message.id.toString(),
+                        originalText = content,
+                        analysisType = analysisType.toString(),
+                        issues = issues
+                    )
+                }
+            }
+        }
+    }
+
+    private fun analyzeTextWithAI(text: String, systemPrompt: String): List<AnalysisIssue> {
+        if (text.isBlank()) {
+            return emptyList()
+        }
+
+        val chatClient = baseChatClient.mutate()
+            .defaultSystem(systemPrompt)
+            .defaultOptions(
+                DefaultChatOptionsBuilder()
+                    .maxTokens(500)
+                    .temperature(0.1)
+                    .build()
+            )
+            .build()
+
+        val userPrompt = """
+            Analyze the following text and provide a list of issues in JSON format.
+            Each issue should be a JSON object with fields: "type" (string, e.g., "grammar", "spelling"), "text" (string, the exact text segment with the issue), "description" (string, explanation), "suggestion" (string or null, suggested correction), "startOffset" (integer, 0-based index), "endOffset" (integer, 0-based index, exclusive).
+            Ensure startOffset and endOffset are correct character indices within the input text.
+            
+            Input text:
+            "$text"
+            
+            JSON Output:
+        """.trimIndent()
+
+        return try {
+            val promptToSend = Prompt(userPrompt)
+            val aiResponse = chatClient.prompt(promptToSend).call().content()
+            if (aiResponse != null && aiResponse.startsWith("[")) {
+                objectMapper.readValue<List<AnalysisIssue>>(aiResponse)
+            } else {
+                println("AI did not return expected JSON format for analysis of text: '$text'. Response: '$aiResponse'")
+                emptyList()
+            }
+
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    companion object {
+        const val STOP_CONVERSATION_PROMPT =
+            "Politely inform the user that the conversation message limit for this topic has been reached and you must now conclude the discussion. Wish them well."
+
+        const val GRAMMAR_CHECK_SYSTEM_PROMPT = """
+            You are an expert grammar checker.
+            Your task is to review the following user text for grammatical errors and punctuation issues.
+            If there are no errors, respond *exactly* with: No mistakes
+            If there are errors, respond Be concise.
+        """
+
+        const val BASIC_GRAMMAR_PROMPT = """
+            You are an English language assistant focused on basic corrections.
+            Analyze the user's text ONLY for grammar, spelling, and punctuation errors.
+            Provide the output as a JSON array of issues. Each issue must have "type" (string, e.g., "grammar", "spelling", "punctuation"), "text" (string, the segment), "description" (string, explanation), "suggestion" (string, correction), "startOffset" (integer), "endOffset" (integer) fields.
+            Focus on common errors: verb tense, subject-verb agreement, articles (a/an/the), prepositions, basic sentence structure, common typos, missing commas/periods.
+            Return ONLY the JSON array.
+            """
+
+        const val COMMON_BEGINNER_ERRORS_PROMPT = """
+            You are an English language assistant helping beginners.
+            Analyze the user's text specifically for common mistakes made by language learners.
+            Focus on errors like "I am agree", incorrect use of much/many, little/few, common prepositions in fixed phrases, simple modal verb errors, basic word order issues.
+            Provide the output as a JSON array of issues with "type" (string, e.g., "beginner-error"), "text", "description", "suggestion", "startOffset", "endOffset" fields.
+            Return ONLY the JSON array.
+            """
+
+        const val CLARITY_STYLE_PROMPT = """
+            You are an English writing tutor focused on clarity and style. (PAID FEATURE)
+            Analyze the user's text for awkward phrasing, repetitive sentence structures, sentences that are hard to follow, or lack of flow.
+            Suggest alternative ways to phrase sentences to improve clarity and make the text sound more natural.
+            Provide the output as a JSON array of issues with "type" (string, e.g., "clarity", "structure"), "text", "description" (explaining why it's awkward/unclear), "suggestion" (improved phrasing), "startOffset", "endOffset" fields.
+            Return ONLY the JSON array.
+            """
+
+        const val VOCABULARY_PHRASING_PROMPT = """
+            You are an English language expert focused on vocabulary and natural phrasing. (PAID FEATURE)
+            Analyze the user's text and suggest more precise, varied, or natural word choices and expressions (idioms, phrasal verbs, collocations).
+            Explain why the suggested vocabulary/phrase is better or more appropriate.
+            Provide the output as a JSON array of issues with "type" (string, e.g., "vocabulary", "phrasing"), "text", "description" (explaining the suggestion), "suggestion" (alternative word/phrase), "startOffset", "endOffset" fields.
+            Return ONLY the JSON array.
+            """
     }
 }
