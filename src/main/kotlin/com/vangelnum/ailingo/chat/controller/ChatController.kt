@@ -25,6 +25,10 @@ class ChatController(
     private val chatService: ChatService
 ) {
 
+    @Operation(
+        summary = "Начать новый диалог по теме",
+        description = "Создает новый диалог с ботом на выбранную тему и возвращает первое сообщение бота."
+    )
     @PostMapping("/{topicName}")
     fun startConversation(@PathVariable topicName: String): ConversationMessage {
         return chatService.startConversation(topicName)
@@ -44,12 +48,24 @@ class ChatController(
         }
     }
 
+    @Operation(
+        summary = "Продолжить диалог",
+        description = "Отправляет сообщение пользователя в существующий диалог и возвращает ответ бота."
+    )
     @PostMapping("/continue/{conversationId}")
     fun continueDialog(@PathVariable conversationId: String, @RequestBody userInput: String): ConversationMessage {
-        return chatService.continueDialog(UUID.fromString(conversationId), userInput)
+        try {
+            val conversationUuid = UUID.fromString(conversationId)
+            return chatService.continueDialog(conversationUuid, userInput)
+        } catch (e: IllegalArgumentException) {
+            throw InvalidRequestException("Invalid conversation ID format.")
+        }
     }
 
-    @Operation(summary = "Получить список чатов")
+    @Operation(
+        summary = "Получить список всех активных диалогов пользователя",
+        description = "Возвращает сводную информацию по каждому диалогу, принадлежащему текущему пользователю."
+    )
     @GetMapping("/all")
     fun getConversations(): List<ConversationSummary> {
         return chatService.getConversations()
@@ -91,6 +107,7 @@ class ChatController(
     fun analyzeVocabularyPhrasing(@PathVariable conversationId: String): ResponseEntity<List<TextAnalysisResult>> {
         return analyzeConversation(conversationId, AnalysisType.VOCABULARY_PHRASING)
     }
+
     private fun analyzeConversation(conversationId: String, analysisType: AnalysisType): ResponseEntity<List<TextAnalysisResult>> {
         try {
             val conversationUuid = UUID.fromString(conversationId)

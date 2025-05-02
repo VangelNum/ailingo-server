@@ -3,7 +3,6 @@ package com.vangelnum.ailingo.chat.serviceimpl
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.vangelnum.ailingo.chat.entity.HistoryMessageEntity
-import com.vangelnum.ailingo.chat.model.AnalysisIssue
 import com.vangelnum.ailingo.chat.model.AnalysisType
 import com.vangelnum.ailingo.chat.model.ConversationMessage
 import com.vangelnum.ailingo.chat.model.ConversationSummary
@@ -289,62 +288,67 @@ class ChatServiceImpl(
         val messages = historyRepository.findByConversationIdAndOwnerOrderByTimestamp(conversationId, user)
 
         if (messages.isEmpty()) {
-            throw InvalidRequestException("Conversation not found.")
+            throw InvalidRequestException("Conversation not found or access denied.")
         }
 
-        val userMessages = messages.filter { it.type == MessageType.USER && !it.content.isNullOrBlank() }
+        val userMessagesToAnalyze = messages.filter { it.type == MessageType.USER && !it.content.isNullOrBlank() }
 
-        return userMessages.mapNotNull { message ->
-            message.content?.let { content ->
-                analyzeTextWithAI(content, systemPrompt).let { issues ->
-                    TextAnalysisResult(
-                        messageId = message.id.toString(),
-                        originalText = content,
-                        analysisType = analysisType.toString(),
-                        issues = issues
-                    )
-                }
-            }
+        if (userMessagesToAnalyze.isEmpty()) {
+            return emptyList()
         }
+
+        return analyzeMessagesWithAI(userMessagesToAnalyze, systemPrompt, analysisType)
     }
 
-    private fun analyzeTextWithAI(text: String, systemPrompt: String): List<AnalysisIssue> {
-        if (text.isBlank()) {
-            return emptyList()
+    private fun analyzeMessagesWithAI(
+        userMessages: List<HistoryMessageEntity>,
+        systemPrompt: String,
+        analysisType: AnalysisType
+    ): List<TextAnalysisResult> {
+        val formattedMessages = userMessages.joinToString(separator = "\n---\n") { message ->
+            "Message ID: ${message.id}\nText: ${message.content}"
         }
 
         val chatClient = baseChatClient.mutate()
             .defaultSystem(systemPrompt)
             .defaultOptions(
                 DefaultChatOptionsBuilder()
-                    .maxTokens(500)
+                    .maxTokens(1000)
                     .temperature(0.1)
                     .build()
             )
             .build()
 
         val userPrompt = """
-            Analyze the following text and provide a list of issues in JSON format.
-            Each issue should be a JSON object with fields: "type" (string, e.g., "grammar", "spelling"), "text" (string, the exact text segment with the issue), "description" (string, explanation), "suggestion" (string or null, suggested correction), "startOffset" (integer, 0-based index), "endOffset" (integer, 0-based index, exclusive).
-            Ensure startOffset and endOffset are correct character indices within the input text.
-            
-            Input text:
-            "$text"
-            
-            JSON Output:
-        """.trimIndent()
+            Analyze the following user messages for ${analysisType.name.replace("_", " ")}.
+            Identify issues based on the system prompt provided.
+            Return a JSON array formatted exactly as a list of TextAnalysisResult objects.
+            Each TextAnalysisResult object must correspond to one input message and include "messageId", "originalText", "analysisType".
+            The "issues" field within each TextAnalysisResult should be a list of AnalysisIssue objects.
+            Each AnalysisIssue object must have "type", "text" (the problematic word or short phrase), "description", and "suggestion".
+            Do NOT include "startOffset" or "endOffset".
+            Return ONLY the JSON array.
+
+            Input Messages:
+            $formattedMessages
+
+            JSON Output (List<TextAnalysisResult>):
+            """.trimIndent()
 
         return try {
             val promptToSend = Prompt(userPrompt)
             val aiResponse = chatClient.prompt(promptToSend).call().content()
-            if (aiResponse != null && aiResponse.startsWith("[")) {
-                objectMapper.readValue<List<AnalysisIssue>>(aiResponse)
+
+            if (aiResponse != null && aiResponse.trim().startsWith("[")) {
+                objectMapper.readValue<List<TextAnalysisResult>>(aiResponse)
             } else {
-                println("AI did not return expected JSON format for analysis of text: '$text'. Response: '$aiResponse'")
+                println("AI did not return expected JSON format for analysis of type $analysisType. Response: '$aiResponse'")
                 emptyList()
             }
 
         } catch (e: Exception) {
+            e.printStackTrace()
+            println("Error during AI analysis for type $analysisType: ${e.message}")
             emptyList()
         }
     }
@@ -359,34 +363,46 @@ class ChatServiceImpl(
         """
 
         const val BASIC_GRAMMAR_PROMPT = """
-            You are an English language assistant focused on basic corrections.
-            Analyze the user's text ONLY for grammar, spelling, and punctuation errors.
-            Provide the output as a JSON array of issues. Each issue must have "type" (string, e.g., "grammar", "spelling", "punctuation"), "text" (string, the segment), "description" (string, explanation), "suggestion" (string, correction), "startOffset" (integer), "endOffset" (integer) fields.
+            You are an English language assistant focused on basic corrections (grammar, spelling, punctuation).
+            Analyze the provided user messages, formatted as "Message ID: [id]\nText: [content]", and identify errors.
+            Return a JSON array formatted exactly as a list of TextAnalysisResult objects.
+            Each TextAnalysisResult object must contain "messageId", "originalText", "analysisType", and an "issues" list.
+            Each issue object in the "issues" list must have "type" (e.g., "grammar", "spelling", "punctuation"), "text" (the problematic word or short phrase), "description" (explanation), and "suggestion" (correction).
+            Do NOT include "startOffset" or "endOffset".
             Focus on common errors: verb tense, subject-verb agreement, articles (a/an/the), prepositions, basic sentence structure, common typos, missing commas/periods.
             Return ONLY the JSON array.
             """
 
         const val COMMON_BEGINNER_ERRORS_PROMPT = """
             You are an English language assistant helping beginners.
-            Analyze the user's text specifically for common mistakes made by language learners.
+            Analyze the provided user messages, formatted as "Message ID: [id]\nText: [content]", and identify common mistakes made by language learners.
+            Return a JSON array formatted exactly as a list of TextAnalysisResult objects.
+            Each TextAnalysisResult object must contain "messageId", "originalText", "analysisType", and an "issues" list.
+            Each issue object in the "issues" list must have "type" (e.g., "beginner-error"), "text" (the problematic word or short phrase), "description", and "suggestion".
+            Do NOT include "startOffset" or "endOffset".
             Focus on errors like "I am agree", incorrect use of much/many, little/few, common prepositions in fixed phrases, simple modal verb errors, basic word order issues.
-            Provide the output as a JSON array of issues with "type" (string, e.g., "beginner-error"), "text", "description", "suggestion", "startOffset", "endOffset" fields.
             Return ONLY the JSON array.
             """
 
         const val CLARITY_STYLE_PROMPT = """
             You are an English writing tutor focused on clarity and style. (PAID FEATURE)
-            Analyze the user's text for awkward phrasing, repetitive sentence structures, sentences that are hard to follow, or lack of flow.
+            Analyze the provided user messages, formatted as "Message ID: [id]\nText: [content]", for awkward phrasing, repetitive sentence structures, sentences that are hard to follow, or lack of flow.
+            Return a JSON array formatted exactly as a list of TextAnalysisResult objects.
+            Each TextAnalysisResult object must contain "messageId", "originalText", "analysisType", and an "issues" list.
+            Each issue object in the "issues" list must have "type" (e.g., "clarity", "structure"), "text" (the problematic word or short phrase/segment), "description" (explaining why it's awkward/unclear), and "suggestion" (improved phrasing).
+            Do NOT include "startOffset" or "endOffset".
             Suggest alternative ways to phrase sentences to improve clarity and make the text sound more natural.
-            Provide the output as a JSON array of issues with "type" (string, e.g., "clarity", "structure"), "text", "description" (explaining why it's awkward/unclear), "suggestion" (improved phrasing), "startOffset", "endOffset" fields.
             Return ONLY the JSON array.
             """
 
         const val VOCABULARY_PHRASING_PROMPT = """
             You are an English language expert focused on vocabulary and natural phrasing. (PAID FEATURE)
-            Analyze the user's text and suggest more precise, varied, or natural word choices and expressions (idioms, phrasal verbs, collocations).
+            Analyze the provided user messages, formatted as "Message ID: [id]\nText: [content]", and suggest more precise, varied, or natural word choices and expressions (idioms, phrasal verbs, collocations).
+            Return a JSON array formatted exactly as a list of TextAnalysisResult objects.
+            Each TextAnalysisResult object must contain "messageId", "originalText", "analysisType", and an "issues" list.
+            Each issue object in the "issues" list must have "type" (e.g., "vocabulary", "phrasing"), "text" (the problematic word or short phrase), "description" (explaining the suggestion), and "suggestion" (alternative word/phrase).
+            Do NOT include "startOffset" or "endOffset".
             Explain why the suggested vocabulary/phrase is better or more appropriate.
-            Provide the output as a JSON array of issues with "type" (string, e.g., "vocabulary", "phrasing"), "text", "description" (explaining the suggestion), "suggestion" (alternative word/phrase), "startOffset", "endOffset" fields.
             Return ONLY the JSON array.
             """
     }
