@@ -21,4 +21,6 @@ interface ChatService {
     fun analyzeConversationCommonErrors(conversationId: UUID): List<TextAnalysisResult>
     fun analyzeConversationClarityStyle(conversationId: UUID): List<TextAnalysisResult>
     fun analyzeConversationVocabulary(conversationId: UUID): List<TextAnalysisResult>
+
+    fun startCustomConversation(topicIdea: String): ConversationMessage
 }

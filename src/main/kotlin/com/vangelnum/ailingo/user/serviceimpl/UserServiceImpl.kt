@@ -1,5 +1,10 @@
 package com.vangelnum.ailingo.user.serviceimpl
 
+import com.vangelnum.ailingo.achievement.entity.AchievementEntity
+import com.vangelnum.ailingo.achievement.model.AchievementResponse
+import com.vangelnum.ailingo.achievement.model.AchievementType
+import com.vangelnum.ailingo.achievement.repository.AchievementRepository
+import com.vangelnum.ailingo.chat.model.MessageType
 import com.vangelnum.ailingo.chat.repository.MessageHistoryRepository
 import com.vangelnum.ailingo.core.GlobalExceptionHandler
 import com.vangelnum.ailingo.core.InsufficientFundsException
@@ -36,7 +41,8 @@ class UserServiceImpl(
     private val userValidator: UserValidator,
     private val emailService: EmailService,
     private val messageHistoryRepository: MessageHistoryRepository,
-    private val favoriteWordsRepository: FavoriteWordsRepository
+    private val favoriteWordsRepository: FavoriteWordsRepository,
+    private val achievementRepository: AchievementRepository
 ) : UserService {
 
     @Transactional
@@ -111,6 +117,10 @@ class UserServiceImpl(
                 xp = 0
             )
             val savedUser = userRepository.save(newUser)
+
+            // Проверка и выдача достижения за первый логин
+            checkAndGrantFirstLoginAchievement(savedUser)
+
             pendingUserRepository.delete(pendingUser)
             return savedUser
         } else {
@@ -248,7 +258,6 @@ class UserServiceImpl(
         userRepository.save(user)
     }
 
-
     override fun claimDailyLoginReward(): DailyLoginResponse {
         val user = getCurrentUser()
         val now = LocalDateTime.now()
@@ -269,16 +278,16 @@ class UserServiceImpl(
             user.streak = 0
         }
 
-        user.streak = (user.streak + 1) % 11
-        if (user.streak == 0) {
-            user.streak = 1
-        }
+        // Keep streak at a maximum of 10
+        user.streak = minOf(user.streak + 1, 10)
 
         val coinsRewarded = calculateDailyReward(user.streak)
 
         user.coins += coinsRewarded
         user.lastDailyLogin = now
         userRepository.save(user)
+
+        checkAndGrantStreakAchievements(user)
 
         return DailyLoginResponse(
             streak = user.streak,
@@ -295,8 +304,9 @@ class UserServiceImpl(
 
         val (isAvailable, remainingTime) = isDailyRewardAvailable(user, now)
 
+        val nextStreak = minOf(user.streak + 1, 10)
         val coinsRewarded = if (isAvailable) {
-            calculateDailyReward(user.streak + 1)
+            calculateDailyReward(nextStreak)
         } else {
             0
         }
@@ -337,6 +347,168 @@ class UserServiceImpl(
             9 -> 45
             10 -> 50 // Max reward
             else -> 5 // Default, or handle edge cases
+        }
+    }
+
+    private fun checkAndGrantFirstLoginAchievement(user: UserEntity) {
+        val achievementType = AchievementType.FIRST_LOGIN
+        if (!hasUserClaimedAchievement(user, achievementType)) {
+            grantAchievement(user, achievementType, 10, 20) // Example reward: 10 coins, 20 xp
+        }
+    }
+
+    private fun checkAndGrantStreakAchievements(user: UserEntity) {
+        when (user.streak) {
+            3 -> grantStreakAchievement(user, AchievementType.STREAK_3_DAYS, 15, 30) // 15 coins, 30 xp
+            5 -> grantStreakAchievement(user, AchievementType.STREAK_5_DAYS, 20, 40) // 20 coins, 40 xp
+            7 -> grantStreakAchievement(user, AchievementType.STREAK_7_DAYS, 25, 50) // 25 coins, 50 xp
+        }
+    }
+
+    // No usage in current logic, consider to use in future
+    override fun checkAndGrantTopicAchievements(user: UserEntity) {
+        val completedTopicsCount = messageHistoryRepository.countDistinctTopicIdsByOwnerAndFinalType(user, MessageType.FINAL)
+
+        when (completedTopicsCount) {
+            3 -> grantTopicAchievement(user, AchievementType.COMPLETE_3_TOPICS, 30, 60)
+            5 -> grantTopicAchievement(user, AchievementType.COMPLETE_5_TOPICS, 40, 80)
+        }
+    }
+
+    private fun grantTopicAchievement(user: UserEntity, achievementType: AchievementType, coins: Int, xp: Int) {
+        if (!hasUserClaimedAchievement(user, achievementType)) {
+            grantAchievement(user, achievementType, coins, xp)
+        }
+    }
+
+    private fun grantStreakAchievement(user: UserEntity, achievementType: AchievementType, coins: Int, xp: Int) {
+        if (!hasUserClaimedAchievement(user, achievementType)) {
+            grantAchievement(user, achievementType, coins, xp)
+        }
+    }
+
+
+    fun grantAchievement(user: UserEntity, achievementType: AchievementType, coins: Int, xp: Int) {
+        val achievement = AchievementEntity(user = user, type = achievementType, claimed = true, claimDate = LocalDateTime.now())
+        achievementRepository.save(achievement)
+
+        user.coins += coins
+        user.xp += xp
+        userRepository.save(user)
+    }
+
+    private fun hasUserClaimedAchievement(user: UserEntity, achievementType: AchievementType): Boolean {
+        return achievementRepository.existsByUserAndType(user, achievementType)
+    }
+
+    @Transactional
+    override fun claimAchievement(achievementId: Long): Boolean {
+        val user = getCurrentUser()
+        val achievement = achievementRepository.findById(achievementId)
+            .orElseThrow { EntityNotFoundException("Achievement with id $achievementId not found") }
+
+        if (achievement.user != user) {
+            throw SecurityException("You do not have permission to claim this achievement")
+        }
+
+        if (achievement.claimed) {
+            throw IllegalStateException("Achievement already claimed")
+        }
+
+        achievement.claimed = true
+        achievement.claimDate = LocalDateTime.now()
+        achievementRepository.save(achievement)
+
+        val (coins, xp) = getAchievementReward(achievement.type)
+
+        user.coins += coins
+        user.xp += xp
+        userRepository.save(user)
+
+        return true
+    }
+
+    private fun getAchievementReward(achievementType: AchievementType): Pair<Int, Int> {
+        return when (achievementType) {
+            AchievementType.FIRST_LOGIN -> Pair(10, 20)
+            AchievementType.STREAK_3_DAYS -> Pair(15, 30)
+            AchievementType.STREAK_5_DAYS -> Pair(20, 40)
+            AchievementType.STREAK_7_DAYS -> Pair(25, 50)
+            AchievementType.COMPLETE_1_TOPIC -> Pair(10, 10)
+            AchievementType.COMPLETE_3_TOPICS -> Pair(30, 60)
+            AchievementType.COMPLETE_5_TOPICS -> Pair(40, 80)
+        }
+    }
+
+    override fun getAvailableAchievements(): List<AchievementResponse> {
+        val user = getCurrentUser()
+        val completedTopicsCount = messageHistoryRepository.countDistinctTopicIdsByOwnerAndFinalType(user, MessageType.FINAL)
+
+        val achievements = mutableListOf<AchievementResponse>()
+
+        AchievementType.entries.forEach { achievementType ->
+            var achievementEntity: AchievementEntity? = achievementRepository.findByUserAndType(user, achievementType)
+            val claimed = achievementEntity?.claimed ?: false
+            val isAvailable = !claimed && isAchievementAvailable(user, achievementType, completedTopicsCount)
+
+            if (isAvailable && achievementEntity == null) {
+                achievementEntity = AchievementEntity(user = user, type = achievementType, claimed = false)
+                achievementRepository.save(achievementEntity)
+            }
+
+            val (coins, xp) = getAchievementReward(achievementType)
+
+            achievements.add(
+                AchievementResponse(
+                    type = achievementType,
+                    coins = coins,
+                    xp = xp,
+                    claimed = claimed,
+                    isAvailable = isAvailable,
+                    achievementId = achievementEntity?.id,
+                    description = getAchievementDescription(achievementType),
+                    imageUrl = getAchievementImageUrl(achievementType),
+                    claimDate = achievementEntity?.claimDate
+                )
+            )
+        }
+
+        return achievements
+    }
+
+    private fun isAchievementAvailable(user: UserEntity, achievementType: AchievementType, completedTopicsCount: Int): Boolean {
+        return when (achievementType) {
+            AchievementType.FIRST_LOGIN -> user.lastLoginTime != null
+            AchievementType.STREAK_3_DAYS -> user.streak >= 3
+            AchievementType.STREAK_5_DAYS -> user.streak >= 5
+            AchievementType.STREAK_7_DAYS -> user.streak >= 7
+            AchievementType.COMPLETE_3_TOPICS -> completedTopicsCount >= 3
+            AchievementType.COMPLETE_5_TOPICS -> completedTopicsCount >= 5
+            AchievementType.COMPLETE_1_TOPIC -> completedTopicsCount >= 1
+        }
+    }
+
+    private fun getAchievementDescription(achievementType: AchievementType): String {
+        return when (achievementType) {
+            AchievementType.FIRST_LOGIN -> "Войдите в приложение в первый раз."
+            AchievementType.STREAK_3_DAYS -> "Сохраните стрик 3 дня подряд."
+            AchievementType.STREAK_5_DAYS -> "Сохраните стрик 5 дней подряд."
+            AchievementType.STREAK_7_DAYS -> "Сохраните стрик 7 дней подряд."
+            AchievementType.COMPLETE_1_TOPIC -> "Пройдите первую тему"
+            AchievementType.COMPLETE_3_TOPICS -> "Пройдите 3 темы."
+            AchievementType.COMPLETE_5_TOPICS -> "Пройдите 5 тем."
+        }
+    }
+
+    private fun getAchievementImageUrl(achievementType: AchievementType): String {
+        return when (achievementType) {
+            AchievementType.FIRST_LOGIN -> "https://i.ibb.co/4Z9ZPPWh/IMG-2.png"
+            AchievementType.STREAK_3_DAYS -> "https://i.ibb.co/qYWX5XZS/streak.png"
+            AchievementType.STREAK_5_DAYS -> "https://i.ibb.co/qYWX5XZS/streak.png"
+            AchievementType.STREAK_7_DAYS -> "https://i.ibb.co/qYWX5XZS/streak.png"
+            AchievementType.COMPLETE_1_TOPIC -> "https://i.ibb.co/3Y034D6n/IMG.png"
+            AchievementType.COMPLETE_3_TOPICS -> "https://i.ibb.co/3Y034D6n/IMG.png"
+            AchievementType.COMPLETE_5_TOPICS -> "https://i.ibb.co/3Y034D6n/IMG.png"
         }
     }
 }

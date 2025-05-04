@@ -6,6 +6,7 @@ import com.vangelnum.ailingo.chat.model.ConversationSummary
 import com.vangelnum.ailingo.chat.model.TextAnalysisResult
 import com.vangelnum.ailingo.chat.service.ChatService
 import com.vangelnum.ailingo.core.InvalidRequestException
+import com.vangelnum.ailingo.user.service.UserService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.http.ResponseEntity
@@ -17,12 +18,12 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
 
-
 @Tag(name = "Взаимодействие с ботом")
 @RestController
 @RequestMapping("/api/v1/conversations")
 class ChatController(
-    private val chatService: ChatService
+    private val chatService: ChatService,
+    private val userService: UserService
 ) {
 
     @Operation(
@@ -32,6 +33,15 @@ class ChatController(
     @PostMapping("/{topicName}")
     fun startConversation(@PathVariable topicName: String): ConversationMessage {
         return chatService.startConversation(topicName)
+    }
+
+    @Operation(
+        summary = "Начать новый диалог по своей теме",
+        description = "Создает новый диалог с ботом на тему, сгенерированную на основе запроса пользователя и возвращает первое сообщение бота."
+    )
+    @PostMapping("/custom")
+    fun startCustomConversation(@RequestBody topicIdea: String): ConversationMessage {
+        return chatService.startCustomConversation(topicIdea)
     }
 
     @Operation(
@@ -98,14 +108,14 @@ class ChatController(
         description = "Проверяет все сообщения пользователя в диалоге, предлагая улучшения структуры и ясности текста. Требуется платная подписка.")
     @PostMapping("/{conversationId}/analyze/clarity-style")
     fun analyzeClarityStyle(@PathVariable conversationId: String): ResponseEntity<List<TextAnalysisResult>> {
-        return analyzeConversation(conversationId, AnalysisType.CLARITY_STYLE)
+        return performPaidAnalysis(conversationId, AnalysisType.CLARITY_STYLE)
     }
 
     @Operation(summary = "Анализ диалога: Словарный запас и естественные выражения (Платно)",
         description = "Проверяет все сообщения пользователя в диалоге, предлагая улучшения словарного запаса и более естественные выражения. Требуется платная подписка.")
     @PostMapping("/{conversationId}/analyze/vocabulary-phrasing")
     fun analyzeVocabularyPhrasing(@PathVariable conversationId: String): ResponseEntity<List<TextAnalysisResult>> {
-        return analyzeConversation(conversationId, AnalysisType.VOCABULARY_PHRASING)
+        return performPaidAnalysis(conversationId, AnalysisType.VOCABULARY_PHRASING)
     }
 
     private fun analyzeConversation(conversationId: String, analysisType: AnalysisType): ResponseEntity<List<TextAnalysisResult>> {
@@ -114,8 +124,28 @@ class ChatController(
             val analysisResults = when (analysisType) {
                 AnalysisType.BASIC_GRAMMAR -> chatService.analyzeConversationBasicGrammar(conversationUuid)
                 AnalysisType.BEGINNER_ERRORS -> chatService.analyzeConversationCommonErrors(conversationUuid)
-                AnalysisType.CLARITY_STYLE -> chatService.analyzeConversationClarityStyle(conversationUuid)
-                AnalysisType.VOCABULARY_PHRASING -> chatService.analyzeConversationVocabulary(conversationUuid)
+                AnalysisType.CLARITY_STYLE -> throw IllegalStateException("This should not be called directly for clarity style.")
+                AnalysisType.VOCABULARY_PHRASING -> throw IllegalStateException("This should not be called directly for vocabulary phrasing.")
+            }
+            return ResponseEntity.ok(analysisResults)
+        } catch (e: IllegalArgumentException) {
+            throw InvalidRequestException("Invalid conversation ID format.")
+        }
+    }
+
+    private fun performPaidAnalysis(conversationId: String, analysisType: AnalysisType): ResponseEntity<List<TextAnalysisResult>> {
+        try {
+            val conversationUuid = UUID.fromString(conversationId)
+            val analysisResults = when (analysisType) {
+                AnalysisType.CLARITY_STYLE -> {
+                    userService.changeCoins(-10)
+                    chatService.analyzeConversationClarityStyle(conversationUuid)
+                }
+                AnalysisType.VOCABULARY_PHRASING -> {
+                    userService.changeCoins(-10)
+                    chatService.analyzeConversationVocabulary(conversationUuid)
+                }
+                else -> throw IllegalArgumentException("Invalid analysis type for paid analysis.")
             }
             return ResponseEntity.ok(analysisResults)
         } catch (e: IllegalArgumentException) {

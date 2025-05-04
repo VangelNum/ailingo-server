@@ -70,6 +70,97 @@ class ChatServiceImpl(
         }
     }
 
+    override fun startCustomConversation(topicIdea: String): ConversationMessage {
+        val user = userService.getCurrentUser()
+
+        try {
+            userService.changeCoins(-20)
+        } catch (e: Exception) {
+            throw e
+        }
+
+        val conversationId = UUID.randomUUID()
+
+        val prompts = generatePromptsForCustomTopic(topicIdea)
+        val welcomePrompt = prompts["welcomePrompt"] ?: throw RuntimeException("Failed to generate Welcome Prompt.")
+        val systemPrompt = prompts["systemPrompt"] ?: throw RuntimeException("Failed to generate System Prompt.")
+
+
+        val customTopic = TopicEntity(
+            name = "Custom Topic: $topicIdea",
+            image = "default",
+            price = 20,
+            level = 0,
+            welcomePrompt = welcomePrompt,
+            systemPrompt = systemPrompt,
+            messageLimit = 20,
+            xpCompleteTopic = 0
+        )
+
+        val initialMessageContent: String? = createMessage(customTopic, emptyList(), null)?.text
+
+        if (initialMessageContent == null) {
+            throw RuntimeException("Failed to generate initial bot message.")
+        }
+
+        val historyMessage = HistoryMessageEntity(
+            topic = customTopic,
+            conversationId = conversationId,
+            content = initialMessageContent,
+            type = MessageType.SYSTEM,
+            owner = user,
+            timestamp = Instant.now()
+        )
+
+        val savedMessage = historyRepository.save(historyMessage)
+
+        val suggestions = generateSuggestions(customTopic, listOf(mapHistoryMessageToMessage(savedMessage)))
+        return mapHistoryMessageEntityToConversationMessageDto(savedMessage).apply {
+            this.suggestions = suggestions
+        }
+    }
+
+    private fun generatePromptsForCustomTopic(topicIdea: String): Map<String, String> {
+        val chatClient = baseChatClient.mutate()
+            .defaultSystem("You are a helpful assistant that creates initial prompts for a conversation topic, designed for English language learning.")
+            .defaultOptions(
+                DefaultChatOptionsBuilder()
+                    .maxTokens(500)
+                    .temperature(0.7)
+                    .build()
+            )
+            .build()
+
+        val prompt = """
+            Based on the topic idea: "$topicIdea", generate a concise and engaging welcome prompt and a detailed system prompt for a chatbot. The chatbot is intended for English language learners.
+            The chatbot must only communicate in English.  It should never switch to any other language. The chatbot should strictly adhere to the given topic and not deviate to unrelated subjects.
+            
+            Welcome Prompt (brief, engaging introduction in English):
+            System Prompt (detailed instructions for the chatbot's behavior, tone, knowledge base, and language - English only):
+            
+            Return the prompts in JSON format:
+            {
+              "welcomePrompt": "...",
+              "systemPrompt": "..."
+            }
+            """.trimIndent()
+
+        return try {
+            val response = chatClient.prompt(prompt).call().content()
+            if (response != null) {
+                objectMapper.readValue(response)
+            } else {
+                mapOf("welcomePrompt" to "Hello! Let's talk about $topicIdea to practice your English.",
+                    "systemPrompt" to "You are a helpful chatbot that talks about the topic: $topicIdea.  You MUST ONLY communicate in English. Focus on assisting English language learners.")
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            mapOf("welcomePrompt" to "Hello! Let's talk about $topicIdea to practice your English.",
+                "systemPrompt" to "You are a helpful chatbot that talks about the topic: $topicIdea.  You MUST ONLY communicate in English. Focus on assisting English language learners.")
+        }
+    }
+
+
     override fun continueDialog(chatId: UUID, userInput: String): ConversationMessage {
         val user = userService.getCurrentUser()
         val messages = historyRepository.findByConversationIdAndOwnerOrderByTimestamp(chatId, user)
@@ -124,14 +215,13 @@ class ChatServiceImpl(
                 )
             )
 
-            userService.addXp(topic.xpCompleteTopic)
+            userService.checkAndGrantTopicAchievements(user)
 
             finalHistoryMessage
         }
 
         val updatedMessagesForSuggestion = historyRepository.findByConversationIdAndOwnerOrderByTimestamp(chatId, user)
-        val suggestions =
-            generateSuggestions(topic, updatedMessagesForSuggestion.map { mapHistoryMessageToMessage(it) })
+        val suggestions = generateSuggestions(topic, updatedMessagesForSuggestion.map { mapHistoryMessageToMessage(it) })
         return mapHistoryMessageEntityToConversationMessageDto(savedAiMessage).apply {
             this.suggestions = suggestions
         }

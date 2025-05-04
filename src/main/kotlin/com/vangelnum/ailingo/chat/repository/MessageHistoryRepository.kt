@@ -28,4 +28,13 @@ interface MessageHistoryRepository : JpaRepository<HistoryMessageEntity, Long> {
     @Modifying
     @Query("DELETE FROM HistoryMessageEntity h WHERE h.topic.id = :topicId")
     fun deleteAllByTopicId(topicId: Long): Int
+
+    @Query(
+        """
+        SELECT COUNT(DISTINCT h.topic.id) 
+        FROM HistoryMessageEntity h 
+        WHERE h.owner = :owner AND h.type = :finalMessageType
+    """
+    )
+    fun countDistinctTopicIdsByOwnerAndFinalType(owner: UserEntity, finalMessageType: MessageType): Int
 }

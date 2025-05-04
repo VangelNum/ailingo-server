@@ -1,5 +1,6 @@
 package com.vangelnum.ailingo.user.service
 
+import com.vangelnum.ailingo.achievement.model.AchievementResponse
 import com.vangelnum.ailingo.user.entity.UserEntity
 import com.vangelnum.ailingo.user.model.DailyLoginResponse
 import com.vangelnum.ailingo.user.model.RegistrationRequest
@@ -20,4 +21,7 @@ interface UserService {
     fun addXp(xp: Int)
     fun claimDailyLoginReward(): DailyLoginResponse
     fun getDailyLoginStatus(): DailyLoginResponse
+    fun getAvailableAchievements(): List<AchievementResponse>
+    fun claimAchievement(achievementId: Long): Boolean
+    fun checkAndGrantTopicAchievements(user: UserEntity)
 }
