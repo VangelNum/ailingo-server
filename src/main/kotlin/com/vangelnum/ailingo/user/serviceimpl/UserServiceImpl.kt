@@ -2,6 +2,7 @@ package com.vangelnum.ailingo.user.serviceimpl
 
 import com.vangelnum.ailingo.chat.repository.MessageHistoryRepository
 import com.vangelnum.ailingo.core.GlobalExceptionHandler
+import com.vangelnum.ailingo.core.InsufficientFundsException
 import com.vangelnum.ailingo.core.enums.Role
 import com.vangelnum.ailingo.core.utils.getCurrentUserEmail
 import com.vangelnum.ailingo.core.validator.UserValidator
@@ -9,6 +10,7 @@ import com.vangelnum.ailingo.favouritewords.repository.FavoriteWordsRepository
 import com.vangelnum.ailingo.pendinguser.entity.PendingUser
 import com.vangelnum.ailingo.pendinguser.repository.PendingUserRepository
 import com.vangelnum.ailingo.user.entity.UserEntity
+import com.vangelnum.ailingo.user.model.DailyLoginResponse
 import com.vangelnum.ailingo.user.model.RegistrationRequest
 import com.vangelnum.ailingo.user.model.UpdateProfileRequest
 import com.vangelnum.ailingo.user.repository.UserRepository
@@ -21,7 +23,10 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.net.MalformedURLException
 import java.net.URL
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 import java.util.Random
 
 @Service
@@ -143,7 +148,14 @@ class UserServiceImpl(
 
     override fun changeCoins(amount: Int) {
         val user = getCurrentUser()
-        //TODO
+        val newBalance = user.coins + amount
+
+        if (newBalance < 0 && amount < 0) {
+            throw InsufficientFundsException("Insufficient funds.  Cannot deduct $amount coins.  Current balance: ${user.coins}")
+        }
+
+        user.coins = newBalance
+        userRepository.save(user)
     }
 
     private fun generateVerificationCode(): String {
@@ -229,5 +241,91 @@ class UserServiceImpl(
         favoriteWordsRepository.deleteAllByUserId(id)
         messageHistoryRepository.deleteAllByOwnerId(id)
         userRepository.deleteById(id)
+    }
+
+    override fun addXp(xp: Int) {
+        val user = getCurrentUser()
+        user.xp += xp
+        userRepository.save(user)
+    }
+
+    override fun claimDailyLoginReward(): DailyLoginResponse {
+        val user = getCurrentUser()
+        val now = LocalDateTime.now()
+
+        if (user.lastDailyLogin != null && ChronoUnit.DAYS.between(user.lastDailyLogin, now) == 0L) {
+            val nextAvailable = user.lastDailyLogin!!.plusDays(1).toInstant(ZoneOffset.UTC)
+            return DailyLoginResponse(
+                streak = user.streak,
+                coinsRewarded = 0,
+                nextRewardAvailable = nextAvailable,
+                message = "Награда уже получена сегодня. Вернитесь завтра."
+            )
+        }
+
+        if (user.lastDailyLogin != null && ChronoUnit.DAYS.between(user.lastDailyLogin, now) > 1) {
+            user.streak = 0
+        }
+
+        user.streak = (user.streak + 1) % 11
+        if (user.streak == 0) {
+            user.streak = 1
+        }
+
+        val coinsRewarded = calculateDailyReward(user.streak)
+
+        user.coins += coinsRewarded
+        user.lastDailyLogin = now
+        userRepository.save(user)
+
+        return DailyLoginResponse(
+            streak = user.streak,
+            coinsRewarded = coinsRewarded,
+            nextRewardAvailable = now.plusDays(1).toInstant(ZoneOffset.UTC),
+            message = "Получено $coinsRewarded монет за ежедневный вход. Текущий стрик: ${user.streak}."
+        )
+    }
+
+    override fun getDailyLoginStatus(): DailyLoginResponse {
+        val user = getCurrentUser()
+        val now = LocalDateTime.now()
+
+        if (user.lastDailyLogin != null && ChronoUnit.DAYS.between(user.lastDailyLogin, now) == 0L) {
+            val nextAvailable = user.lastDailyLogin!!.plusDays(1).toInstant(ZoneOffset.UTC)
+
+            return DailyLoginResponse(
+                streak = user.streak,
+                coinsRewarded = 0,
+                nextRewardAvailable = nextAvailable,
+                message = "Награда уже получена."
+            )
+        }
+
+        val coinsRewarded = calculateDailyReward(user.streak + 1)
+        return DailyLoginResponse(
+            streak = user.streak,
+            coinsRewarded = coinsRewarded,
+            nextRewardAvailable = Instant.now(),
+
+            message = "Следующая награда доступна сейчас. Вы получите $coinsRewarded монет."
+
+        )
+    }
+
+
+    private fun calculateDailyReward(streak: Int): Int {
+        return when (streak) {
+            1 -> 5
+            2 -> 10
+            3 -> 15
+            4 -> 20
+            5 -> 25
+            6 -> 30
+            7 -> 35
+            8 -> 40
+            9 -> 45
+            10 -> 50 // Max reward
+            else -> 5 // Default, or handle edge cases
+        }
     }
 }

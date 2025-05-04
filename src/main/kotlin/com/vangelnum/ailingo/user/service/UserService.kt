@@ -1,6 +1,7 @@
 package com.vangelnum.ailingo.user.service
 
 import com.vangelnum.ailingo.user.entity.UserEntity
+import com.vangelnum.ailingo.user.model.DailyLoginResponse
 import com.vangelnum.ailingo.user.model.RegistrationRequest
 import com.vangelnum.ailingo.user.model.UpdateProfileRequest
 
@@ -16,4 +17,7 @@ interface UserService {
     fun verifyEmail(email: String, verificationCode: String): UserEntity
     fun resendVerificationCode(email: String)
     fun changeCoins(amount: Int)
+    fun addXp(xp: Int)
+    fun claimDailyLoginReward(): DailyLoginResponse
+    fun getDailyLoginStatus(): DailyLoginResponse
 }

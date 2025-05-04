@@ -36,9 +36,12 @@ data class UserEntity(
     @Column
     var coins: Int,
 
-    val xp: Int,
+    var xp: Int,
 
-    val streak: Int,
+    var streak: Int,
+
+    @Column
+    var lastDailyLogin: LocalDateTime? = null,
 
     var verificationCode: String? = null,
 

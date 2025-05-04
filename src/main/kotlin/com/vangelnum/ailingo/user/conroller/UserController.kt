@@ -2,6 +2,7 @@ package com.vangelnum.ailingo.user.conroller
 
 import com.vangelnum.ailingo.core.utils.getCurrentUserEmail
 import com.vangelnum.ailingo.user.entity.UserEntity
+import com.vangelnum.ailingo.user.model.DailyLoginResponse
 import com.vangelnum.ailingo.user.model.RegistrationRequest
 import com.vangelnum.ailingo.user.model.ResendVerificationCodeRequest
 import com.vangelnum.ailingo.user.model.UpdateAvatarRequest
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
 @Tag(name = "Пользователь")
@@ -92,5 +94,23 @@ class UserController(
     fun deleteUser(@PathVariable id: Long): ResponseEntity<Void> {
         userService.deleteUser(id)
         return ResponseEntity.noContent().build()
+    }
+
+    @PostMapping("/coins")
+    fun changeUserCoins(@RequestParam amount: Int): ResponseEntity<String> {
+        userService.changeCoins(amount)
+        return ResponseEntity.ok("Coins updated successfully")
+    }
+
+    @Operation(summary = "Забрать ежедневную награду за вход")
+    @PostMapping("/daily-login/claim")
+    fun claimDailyLoginReward(): ResponseEntity<DailyLoginResponse> {
+        return ResponseEntity.ok(userService.claimDailyLoginReward())
+    }
+
+    @Operation(summary = "Получить статус ежедневного входа")
+    @GetMapping("/daily-login/status")
+    fun getDailyLoginStatus(): ResponseEntity<DailyLoginResponse> {
+        return ResponseEntity.ok(userService.getDailyLoginStatus())
     }
 }

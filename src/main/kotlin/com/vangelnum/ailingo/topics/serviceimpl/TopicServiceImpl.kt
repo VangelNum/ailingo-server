@@ -32,6 +32,7 @@ class TopicServiceImpl(
                 name = topicEntity.name,
                 imageUrl = topicEntity.image,
                 price = topicEntity.price,
+                level = topicEntity.level,
                 welcomePrompt = topicEntity.welcomePrompt,
                 systemPrompt = topicEntity.systemPrompt,
                 messageLimit = topicEntity.messageLimit,

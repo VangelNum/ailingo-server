@@ -40,6 +40,12 @@ class ChatServiceImpl(
             topicRepository.findByName(topicName).orElseThrow { InvalidRequestException("Topic $topicName not found") }
         val user = userService.getCurrentUser()
 
+        try {
+            userService.changeCoins(-topic.price)
+        } catch (e: Exception) {
+            throw e
+        }
+
         val conversationId = UUID.randomUUID()
         val initialMessageContent: String? = createMessage(topic, emptyList(), null)?.text
 
@@ -117,6 +123,9 @@ class ChatServiceImpl(
                     timestamp = Instant.now()
                 )
             )
+
+            userService.addXp(topic.xpCompleteTopic)
+
             finalHistoryMessage
         }
 

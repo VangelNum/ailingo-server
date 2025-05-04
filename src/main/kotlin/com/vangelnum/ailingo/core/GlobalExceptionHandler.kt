@@ -96,3 +96,5 @@ data class ErrorResponse(
 )
 
 class InvalidRequestException(message: String) : RuntimeException(message)
+
+class InsufficientFundsException(message: String) : RuntimeException(message)
