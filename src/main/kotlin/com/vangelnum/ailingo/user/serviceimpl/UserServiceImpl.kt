@@ -23,9 +23,8 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.net.MalformedURLException
 import java.net.URL
-import java.time.Instant
+import java.time.Duration
 import java.time.LocalDateTime
-import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.Random
 
@@ -249,17 +248,20 @@ class UserServiceImpl(
         userRepository.save(user)
     }
 
+
     override fun claimDailyLoginReward(): DailyLoginResponse {
         val user = getCurrentUser()
         val now = LocalDateTime.now()
 
-        if (user.lastDailyLogin != null && ChronoUnit.DAYS.between(user.lastDailyLogin, now) == 0L) {
-            val nextAvailable = user.lastDailyLogin!!.plusDays(1).toInstant(ZoneOffset.UTC)
+        val (isAvailable, remainingTime) = isDailyRewardAvailable(user, now)
+
+        if (!isAvailable) {
             return DailyLoginResponse(
                 streak = user.streak,
                 coinsRewarded = 0,
-                nextRewardAvailable = nextAvailable,
-                message = "Награда уже получена сегодня. Вернитесь завтра."
+                message = "Награда уже получена.",
+                totalRemainingTimeSeconds = remainingTime,
+                isAvailable = false
             )
         }
 
@@ -281,8 +283,9 @@ class UserServiceImpl(
         return DailyLoginResponse(
             streak = user.streak,
             coinsRewarded = coinsRewarded,
-            nextRewardAvailable = now.plusDays(1).toInstant(ZoneOffset.UTC),
-            message = "Получено $coinsRewarded монет за ежедневный вход. Текущий стрик: ${user.streak}."
+            message = "Получено $coinsRewarded монет за ежедневный вход. Текущий стрик: ${user.streak}.",
+            totalRemainingTimeSeconds = 0,
+            isAvailable = true
         )
     }
 
@@ -290,28 +293,36 @@ class UserServiceImpl(
         val user = getCurrentUser()
         val now = LocalDateTime.now()
 
-        if (user.lastDailyLogin != null && ChronoUnit.DAYS.between(user.lastDailyLogin, now) == 0L) {
-            val nextAvailable = user.lastDailyLogin!!.plusDays(1).toInstant(ZoneOffset.UTC)
+        val (isAvailable, remainingTime) = isDailyRewardAvailable(user, now)
 
-            return DailyLoginResponse(
-                streak = user.streak,
-                coinsRewarded = 0,
-                nextRewardAvailable = nextAvailable,
-                message = "Награда уже получена."
-            )
+        val coinsRewarded = if (isAvailable) {
+            calculateDailyReward(user.streak + 1)
+        } else {
+            0
+        }
+        val message = if (isAvailable) {
+            "Награда доступна для получения. Вы получите $coinsRewarded монет."
+        } else {
+            "Награда уже получена. Вернитесь позже."
         }
 
-        val coinsRewarded = calculateDailyReward(user.streak + 1)
         return DailyLoginResponse(
             streak = user.streak,
             coinsRewarded = coinsRewarded,
-            nextRewardAvailable = Instant.now(),
-
-            message = "Следующая награда доступна сейчас. Вы получите $coinsRewarded монет."
-
+            message = message,
+            totalRemainingTimeSeconds = remainingTime,
+            isAvailable = isAvailable
         )
     }
 
+    private fun isDailyRewardAvailable(user: UserEntity, now: LocalDateTime): Pair<Boolean, Long> {
+        if (user.lastDailyLogin != null && ChronoUnit.DAYS.between(user.lastDailyLogin, now) == 0L) {
+            val nextAvailable = user.lastDailyLogin!!.plusDays(1)
+            val remainingTime = Duration.between(now, nextAvailable).toSeconds()
+            return Pair(false, remainingTime)
+        }
+        return Pair(true, 0)
+    }
 
     private fun calculateDailyReward(streak: Int): Int {
         return when (streak) {
