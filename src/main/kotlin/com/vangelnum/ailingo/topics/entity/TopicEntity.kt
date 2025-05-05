@@ -7,7 +7,6 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
-import jakarta.persistence.Lob
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 
@@ -28,12 +27,10 @@ data class TopicEntity(
 
     var level: Int,
 
-    @Lob
-    @Column(name = "welcome_prompt")
+    @Column(name = "welcome_prompt", columnDefinition = "TEXT")
     var welcomePrompt: String,
 
-    @Lob
-    @Column(name = "system_prompt")
+    @Column(name = "system_prompt", columnDefinition = "TEXT")
     var systemPrompt: String,
 
     @Column(name = "message_limit")
