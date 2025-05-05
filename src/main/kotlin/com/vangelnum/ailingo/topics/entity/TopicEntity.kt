@@ -1,11 +1,14 @@
 package com.vangelnum.ailingo.topics.entity
 
+import com.vangelnum.ailingo.user.entity.UserEntity
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
+import jakarta.persistence.JoinColumn
 import jakarta.persistence.Lob
+import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 
 @Entity
@@ -36,5 +39,9 @@ data class TopicEntity(
     var messageLimit: Int,
 
     @Column(name = "xp_complete_topic")
-    var xpCompleteTopic: Int
+    var xpCompleteTopic: Int,
+
+    @ManyToOne
+    @JoinColumn(name = "creator_id")
+    var creator: UserEntity? = null
 )

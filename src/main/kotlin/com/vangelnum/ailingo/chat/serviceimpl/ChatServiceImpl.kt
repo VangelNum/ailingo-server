@@ -10,6 +10,7 @@ import com.vangelnum.ailingo.chat.model.MessageType
 import com.vangelnum.ailingo.chat.model.TextAnalysisResult
 import com.vangelnum.ailingo.chat.repository.MessageHistoryRepository
 import com.vangelnum.ailingo.chat.service.ChatService
+import com.vangelnum.ailingo.core.InsufficientFundsException
 import com.vangelnum.ailingo.core.InvalidRequestException
 import com.vangelnum.ailingo.topics.entity.TopicEntity
 import com.vangelnum.ailingo.topics.repository.TopicRepository
@@ -76,7 +77,7 @@ class ChatServiceImpl(
         try {
             userService.changeCoins(-20)
         } catch (e: Exception) {
-            throw e
+            throw InsufficientFundsException("Not enough coins")
         }
 
         val conversationId = UUID.randomUUID()
@@ -84,7 +85,6 @@ class ChatServiceImpl(
         val prompts = generatePromptsForCustomTopic(topicIdea)
         val welcomePrompt = prompts["welcomePrompt"] ?: throw RuntimeException("Failed to generate Welcome Prompt.")
         val systemPrompt = prompts["systemPrompt"] ?: throw RuntimeException("Failed to generate System Prompt.")
-
 
         val customTopic = TopicEntity(
             name = "Custom Topic: $topicIdea",
@@ -94,17 +94,21 @@ class ChatServiceImpl(
             welcomePrompt = welcomePrompt,
             systemPrompt = systemPrompt,
             messageLimit = 20,
-            xpCompleteTopic = 0
+            xpCompleteTopic = 0,
+            id = 0,
+            creator = user
         )
 
-        val initialMessageContent: String? = createMessage(customTopic, emptyList(), null)?.text
+        val savedTopic = topicRepository.save(customTopic)
+
+        val initialMessageContent: String? = createMessage(savedTopic, emptyList(), null)?.text
 
         if (initialMessageContent == null) {
             throw RuntimeException("Failed to generate initial bot message.")
         }
 
         val historyMessage = HistoryMessageEntity(
-            topic = customTopic,
+            topic = savedTopic,
             conversationId = conversationId,
             content = initialMessageContent,
             type = MessageType.SYSTEM,
@@ -114,7 +118,9 @@ class ChatServiceImpl(
 
         val savedMessage = historyRepository.save(historyMessage)
 
-        val suggestions = generateSuggestions(customTopic, listOf(mapHistoryMessageToMessage(savedMessage)))
+        val messagesForSuggestion = historyRepository.findByConversationIdAndOwnerOrderByTimestamp(conversationId, user)
+        val suggestions = generateSuggestions(savedTopic, messagesForSuggestion.map { mapHistoryMessageToMessage(it) }) // Используем savedTopic
+
         return mapHistoryMessageEntityToConversationMessageDto(savedMessage).apply {
             this.suggestions = suggestions
         }
