@@ -21,7 +21,8 @@ data class TopicEntity(
 
     var name: String,
 
-    var image: String,
+    @Column(columnDefinition = "TEXT")
+    var image: String?,
 
     var price: Int,
 

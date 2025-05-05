@@ -87,8 +87,8 @@ class ChatServiceImpl(
         val systemPrompt = prompts["systemPrompt"] ?: throw RuntimeException("Failed to generate System Prompt.")
 
         val customTopic = TopicEntity(
-            name = "Custom Topic: $topicIdea",
-            image = "default",
+            name = "Custom: $topicIdea",
+            image = null,
             price = 20,
             level = 0,
             welcomePrompt = welcomePrompt,

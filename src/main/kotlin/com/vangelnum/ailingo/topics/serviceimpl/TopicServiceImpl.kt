@@ -23,9 +23,8 @@ class TopicServiceImpl(
     override fun getTopics(): List<TopicResponseDTO> {
         val currentUser = userService.getCurrentUser()
 
-        return topicRepository.findAll().map { topicEntity ->
-            val isCompleted =
-                historyRepository.existsByTopicAndOwnerAndType(topicEntity, currentUser, MessageType.FINAL)
+        return topicRepository.findByCreatorIsNullOrCreator(currentUser).map { topicEntity ->
+            val isCompleted = historyRepository.existsByTopicAndOwnerAndType(topicEntity, currentUser, MessageType.FINAL)
 
             TopicResponseDTO(
                 id = topicEntity.id,
