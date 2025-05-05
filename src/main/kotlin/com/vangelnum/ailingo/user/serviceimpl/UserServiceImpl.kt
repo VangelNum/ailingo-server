@@ -249,6 +249,7 @@ class UserServiceImpl(
         }
         favoriteWordsRepository.deleteAllByUserId(id)
         messageHistoryRepository.deleteAllByOwnerId(id)
+        achievementRepository.deleteAllByUserId(id)
         userRepository.deleteById(id)
     }
 

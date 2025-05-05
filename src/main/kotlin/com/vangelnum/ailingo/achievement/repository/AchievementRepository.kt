@@ -10,4 +10,5 @@ import org.springframework.stereotype.Repository
 interface AchievementRepository : JpaRepository<AchievementEntity, Long> {
     fun existsByUserAndType(user: UserEntity, type: AchievementType): Boolean
     fun findByUserAndType(user: UserEntity, type: AchievementType): AchievementEntity?
+    fun deleteAllByUserId(userId: Long)
 }
