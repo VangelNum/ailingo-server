@@ -247,11 +247,10 @@ class UserServiceImpl(
     @Transactional
     override fun deleteUser(id: Long) {
         val user = userRepository.findById(id).orElseThrow { EntityNotFoundException("Пользователь с id $id не найден") }
-        val topicsToDelete = topicRepository.findByCreator(user)
-        topicsToDelete.forEach { topicRepository.delete(it) }
-        favoriteWordsRepository.deleteAllByUserId(id)
         messageHistoryRepository.deleteAllByOwnerId(id)
+        favoriteWordsRepository.deleteAllByUserId(id)
         achievementRepository.deleteAllByUserId(id)
+        topicRepository.deleteByCreator(user)
         userRepository.deleteById(id)
     }
 
