@@ -14,6 +14,7 @@ import com.vangelnum.ailingo.core.validator.UserValidator
 import com.vangelnum.ailingo.favouritewords.repository.FavoriteWordsRepository
 import com.vangelnum.ailingo.pendinguser.entity.PendingUser
 import com.vangelnum.ailingo.pendinguser.repository.PendingUserRepository
+import com.vangelnum.ailingo.topics.repository.TopicRepository
 import com.vangelnum.ailingo.user.entity.UserEntity
 import com.vangelnum.ailingo.user.model.DailyLoginResponse
 import com.vangelnum.ailingo.user.model.RegistrationRequest
@@ -42,7 +43,8 @@ class UserServiceImpl(
     private val emailService: EmailService,
     private val messageHistoryRepository: MessageHistoryRepository,
     private val favoriteWordsRepository: FavoriteWordsRepository,
-    private val achievementRepository: AchievementRepository
+    private val achievementRepository: AchievementRepository,
+    private val topicRepository: TopicRepository
 ) : UserService {
 
     @Transactional
@@ -244,9 +246,9 @@ class UserServiceImpl(
 
     @Transactional
     override fun deleteUser(id: Long) {
-        if (!userRepository.existsById(id)) {
-            throw EntityNotFoundException("Пользователь с id $id не найден")
-        }
+        val user = userRepository.findById(id).orElseThrow { EntityNotFoundException("Пользователь с id $id не найден") }
+        val topicsToDelete = topicRepository.findByCreator(user)
+        topicsToDelete.forEach { topicRepository.delete(it) }
         favoriteWordsRepository.deleteAllByUserId(id)
         messageHistoryRepository.deleteAllByOwnerId(id)
         achievementRepository.deleteAllByUserId(id)

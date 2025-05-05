@@ -11,4 +11,5 @@ interface TopicRepository : JpaRepository<TopicEntity, Long> {
     fun deleteTopicByName(name: String)
     fun findByName(name: String): Optional<TopicEntity>
     fun findByCreatorIsNullOrCreator(creator: UserEntity): List<TopicEntity>
+    fun findByCreator(creator: UserEntity): List<TopicEntity>
 }
