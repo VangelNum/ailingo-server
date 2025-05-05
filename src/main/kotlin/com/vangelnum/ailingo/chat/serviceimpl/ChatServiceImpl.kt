@@ -75,7 +75,7 @@ class ChatServiceImpl(
         val user = userService.getCurrentUser()
 
         try {
-            userService.changeCoins(-20)
+            userService.changeCoins(-200)
         } catch (e: Exception) {
             throw InsufficientFundsException("Not enough coins")
         }

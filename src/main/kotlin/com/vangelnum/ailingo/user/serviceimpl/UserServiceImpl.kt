@@ -120,9 +120,6 @@ class UserServiceImpl(
             )
             val savedUser = userRepository.save(newUser)
 
-            // Проверка и выдача достижения за первый логин
-            checkAndGrantFirstLoginAchievement(savedUser)
-
             pendingUserRepository.delete(pendingUser)
             return savedUser
         } else {
@@ -349,13 +346,6 @@ class UserServiceImpl(
             9 -> 45
             10 -> 50 // Max reward
             else -> 5 // Default, or handle edge cases
-        }
-    }
-
-    private fun checkAndGrantFirstLoginAchievement(user: UserEntity) {
-        val achievementType = AchievementType.FIRST_LOGIN
-        if (!hasUserClaimedAchievement(user, achievementType)) {
-            grantAchievement(user, achievementType, 10, 20) // Example reward: 10 coins, 20 xp
         }
     }
 
