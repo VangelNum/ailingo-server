@@ -243,7 +243,8 @@ class UserServiceImpl(
 
     @Transactional
     override fun deleteUser(id: Long) {
-        val user = userRepository.findById(id).orElseThrow { EntityNotFoundException("Пользователь с id $id не найден") }
+        val user =
+            userRepository.findById(id).orElseThrow { EntityNotFoundException("Пользователь с id $id не найден") }
         messageHistoryRepository.deleteAllByOwnerId(id)
         favoriteWordsRepository.deleteAllByUserId(id)
         achievementRepository.deleteAllByUserId(id)
@@ -277,10 +278,12 @@ class UserServiceImpl(
             user.streak = 0
         }
 
-        // Keep streak at a maximum of 10
-        user.streak = minOf(user.streak + 1, 10)
+        user.streak += 1
 
-        val coinsRewarded = calculateDailyReward(user.streak)
+        val rewardStreak = minOf(user.streak, 10)
+
+
+        val coinsRewarded = calculateDailyReward(rewardStreak)
 
         user.coins += coinsRewarded
         user.lastDailyLogin = now
@@ -303,9 +306,11 @@ class UserServiceImpl(
 
         val (isAvailable, remainingTime) = isDailyRewardAvailable(user, now)
 
-        val nextStreak = minOf(user.streak + 1, 10)
+        val nextStreak = user.streak + 1
+        val rewardStreak = minOf(nextStreak, 10)
+
         val coinsRewarded = if (isAvailable) {
-            calculateDailyReward(nextStreak)
+            calculateDailyReward(rewardStreak)
         } else {
             0
         }
@@ -345,25 +350,32 @@ class UserServiceImpl(
             8 -> 40
             9 -> 45
             10 -> 50 // Max reward
-            else -> 5 // Default, or handle edge cases
+            else -> 5
         }
     }
 
     private fun checkAndGrantStreakAchievements(user: UserEntity) {
         when (user.streak) {
-            3 -> grantStreakAchievement(user, AchievementType.STREAK_3_DAYS, 15, 30) // 15 coins, 30 xp
-            5 -> grantStreakAchievement(user, AchievementType.STREAK_5_DAYS, 20, 40) // 20 coins, 40 xp
-            7 -> grantStreakAchievement(user, AchievementType.STREAK_7_DAYS, 25, 50) // 25 coins, 50 xp
+            3 -> grantStreakAchievement(user, AchievementType.STREAK_3_DAYS, 15, 30)
+            5 -> grantStreakAchievement(user, AchievementType.STREAK_5_DAYS, 20, 40)
+            7 -> grantStreakAchievement(user, AchievementType.STREAK_7_DAYS, 25, 50)
+            10 -> grantStreakAchievement(user, AchievementType.STREAK_10_DAYS, 30, 60)
         }
     }
 
-    // No usage in current logic, consider to use in future
     override fun checkAndGrantTopicAchievements(user: UserEntity) {
-        val completedTopicsCount = messageHistoryRepository.countDistinctTopicIdsByOwnerAndFinalType(user, MessageType.FINAL)
+        val completedTopicsCount =
+            messageHistoryRepository.countDistinctTopicIdsByOwnerAndFinalType(user, MessageType.FINAL)
 
         when (completedTopicsCount) {
             3 -> grantTopicAchievement(user, AchievementType.COMPLETE_3_TOPICS, 30, 60)
             5 -> grantTopicAchievement(user, AchievementType.COMPLETE_5_TOPICS, 40, 80)
+            10 -> grantTopicAchievement(user, AchievementType.COMPLETE_10_TOPICS, 50, 100)
+        }
+
+        val favoriteWordsCount = favoriteWordsRepository.findByUserId(user.id!!).size
+        if (favoriteWordsCount >= 10) {
+            grantFavoriteWordsAchievement(user, AchievementType.ADD_10_FAVORITE_WORDS, 20, 40)
         }
     }
 
@@ -379,9 +391,15 @@ class UserServiceImpl(
         }
     }
 
+    private fun grantFavoriteWordsAchievement(user: UserEntity, achievementType: AchievementType, coins: Int, xp: Int) {
+        if (!hasUserClaimedAchievement(user, achievementType)) {
+            grantAchievement(user, achievementType, coins, xp)
+        }
+    }
 
     fun grantAchievement(user: UserEntity, achievementType: AchievementType, coins: Int, xp: Int) {
-        val achievement = AchievementEntity(user = user, type = achievementType, claimed = true, claimDate = LocalDateTime.now())
+        val achievement =
+            AchievementEntity(user = user, type = achievementType, claimed = true, claimDate = LocalDateTime.now())
         achievementRepository.save(achievement)
 
         user.coins += coins
@@ -426,22 +444,28 @@ class UserServiceImpl(
             AchievementType.STREAK_3_DAYS -> Pair(15, 30)
             AchievementType.STREAK_5_DAYS -> Pair(20, 40)
             AchievementType.STREAK_7_DAYS -> Pair(25, 50)
+            AchievementType.STREAK_10_DAYS -> Pair(30, 60)
             AchievementType.COMPLETE_1_TOPIC -> Pair(10, 10)
             AchievementType.COMPLETE_3_TOPICS -> Pair(30, 60)
             AchievementType.COMPLETE_5_TOPICS -> Pair(40, 80)
+            AchievementType.COMPLETE_10_TOPICS -> Pair(50, 100)
+            AchievementType.ADD_10_FAVORITE_WORDS -> Pair(20, 40)
         }
     }
 
     override fun getAvailableAchievements(): List<AchievementResponse> {
         val user = getCurrentUser()
-        val completedTopicsCount = messageHistoryRepository.countDistinctTopicIdsByOwnerAndFinalType(user, MessageType.FINAL)
+        val completedTopicsCount =
+            messageHistoryRepository.countDistinctTopicIdsByOwnerAndFinalType(user, MessageType.FINAL)
+        val favoriteWordsCount = favoriteWordsRepository.findByUserId(user.id!!).size
 
         val achievements = mutableListOf<AchievementResponse>()
 
         AchievementType.entries.forEach { achievementType ->
             var achievementEntity: AchievementEntity? = achievementRepository.findByUserAndType(user, achievementType)
             val claimed = achievementEntity?.claimed ?: false
-            val isAvailable = !claimed && isAchievementAvailable(user, achievementType, completedTopicsCount)
+            val isAvailable =
+                !claimed && isAchievementAvailable(user, achievementType, completedTopicsCount, favoriteWordsCount)
 
             if (isAvailable && achievementEntity == null) {
                 achievementEntity = AchievementEntity(user = user, type = achievementType, claimed = false)
@@ -464,19 +488,26 @@ class UserServiceImpl(
                 )
             )
         }
-
         return achievements
     }
 
-    private fun isAchievementAvailable(user: UserEntity, achievementType: AchievementType, completedTopicsCount: Int): Boolean {
+    private fun isAchievementAvailable(
+        user: UserEntity,
+        achievementType: AchievementType,
+        completedTopicsCount: Int,
+        favoriteWordsCount: Int
+    ): Boolean {
         return when (achievementType) {
             AchievementType.FIRST_LOGIN -> user.lastLoginTime != null
             AchievementType.STREAK_3_DAYS -> user.streak >= 3
             AchievementType.STREAK_5_DAYS -> user.streak >= 5
             AchievementType.STREAK_7_DAYS -> user.streak >= 7
+            AchievementType.STREAK_10_DAYS -> user.streak >= 10
             AchievementType.COMPLETE_3_TOPICS -> completedTopicsCount >= 3
             AchievementType.COMPLETE_5_TOPICS -> completedTopicsCount >= 5
             AchievementType.COMPLETE_1_TOPIC -> completedTopicsCount >= 1
+            AchievementType.COMPLETE_10_TOPICS -> completedTopicsCount >= 10
+            AchievementType.ADD_10_FAVORITE_WORDS -> favoriteWordsCount >= 10
         }
     }
 
@@ -486,9 +517,12 @@ class UserServiceImpl(
             AchievementType.STREAK_3_DAYS -> "Сохраните стрик 3 дня подряд."
             AchievementType.STREAK_5_DAYS -> "Сохраните стрик 5 дней подряд."
             AchievementType.STREAK_7_DAYS -> "Сохраните стрик 7 дней подряд."
+            AchievementType.STREAK_10_DAYS -> "Сохраните стрик 10 дней подряд."
             AchievementType.COMPLETE_1_TOPIC -> "Пройдите первую тему"
             AchievementType.COMPLETE_3_TOPICS -> "Пройдите 3 темы."
             AchievementType.COMPLETE_5_TOPICS -> "Пройдите 5 тем."
+            AchievementType.COMPLETE_10_TOPICS -> "Пройдите 10 тем."
+            AchievementType.ADD_10_FAVORITE_WORDS -> "Добавьте 10 слов в избранное."
         }
     }
 
@@ -498,9 +532,12 @@ class UserServiceImpl(
             AchievementType.STREAK_3_DAYS -> "https://i.ibb.co/qYWX5XZS/streak.png"
             AchievementType.STREAK_5_DAYS -> "https://i.ibb.co/qYWX5XZS/streak.png"
             AchievementType.STREAK_7_DAYS -> "https://i.ibb.co/qYWX5XZS/streak.png"
+            AchievementType.STREAK_10_DAYS -> "https://i.ibb.co/qYWX5XZS/streak.png"
             AchievementType.COMPLETE_1_TOPIC -> "https://i.ibb.co/3Y034D6n/IMG.png"
             AchievementType.COMPLETE_3_TOPICS -> "https://i.ibb.co/3Y034D6n/IMG.png"
             AchievementType.COMPLETE_5_TOPICS -> "https://i.ibb.co/3Y034D6n/IMG.png"
+            AchievementType.COMPLETE_10_TOPICS -> "https://i.ibb.co/3Y034D6n/IMG.png"
+            AchievementType.ADD_10_FAVORITE_WORDS -> "https://i.ibb.co/p8HYtCt/favourite-words.png"
         }
     }
 }

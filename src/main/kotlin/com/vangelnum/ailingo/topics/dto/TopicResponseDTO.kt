@@ -10,5 +10,6 @@ data class TopicResponseDTO(
     val systemPrompt: String,
     val messageLimit: Int,
     val isCompleted: Boolean = false,
-    val topicXp: Int
+    val topicXp: Int,
+    val coinCompleteTopic: Int
 )

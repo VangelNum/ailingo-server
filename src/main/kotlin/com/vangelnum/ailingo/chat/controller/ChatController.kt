@@ -105,14 +105,14 @@ class ChatController(
     }
 
     @Operation(summary = "Анализ диалога: Структура предложения и ясность изложения (Платно)",
-        description = "Проверяет все сообщения пользователя в диалоге, предлагая улучшения структуры и ясности текста. Требуется платная подписка.")
+        description = "Проверяет все сообщения пользователя в диалоге, предлагая улучшения структуры и ясности текста. Платно.")
     @PostMapping("/{conversationId}/analyze/clarity-style")
     fun analyzeClarityStyle(@PathVariable conversationId: String): ResponseEntity<List<TextAnalysisResult>> {
         return performPaidAnalysis(conversationId, AnalysisType.CLARITY_STYLE)
     }
 
     @Operation(summary = "Анализ диалога: Словарный запас и естественные выражения (Платно)",
-        description = "Проверяет все сообщения пользователя в диалоге, предлагая улучшения словарного запаса и более естественные выражения. Требуется платная подписка.")
+        description = "Проверяет все сообщения пользователя в диалоге, предлагая улучшения словарного запаса и более естественные выражения. Платно.")
     @PostMapping("/{conversationId}/analyze/vocabulary-phrasing")
     fun analyzeVocabularyPhrasing(@PathVariable conversationId: String): ResponseEntity<List<TextAnalysisResult>> {
         return performPaidAnalysis(conversationId, AnalysisType.VOCABULARY_PHRASING)
@@ -138,11 +138,11 @@ class ChatController(
             val conversationUuid = UUID.fromString(conversationId)
             val analysisResults = when (analysisType) {
                 AnalysisType.CLARITY_STYLE -> {
-                    userService.changeCoins(-10)
+                    userService.changeCoins(-20)
                     chatService.analyzeConversationClarityStyle(conversationUuid)
                 }
                 AnalysisType.VOCABULARY_PHRASING -> {
-                    userService.changeCoins(-10)
+                    userService.changeCoins(-20)
                     chatService.analyzeConversationVocabulary(conversationUuid)
                 }
                 else -> throw IllegalArgumentException("Invalid analysis type for paid analysis.")

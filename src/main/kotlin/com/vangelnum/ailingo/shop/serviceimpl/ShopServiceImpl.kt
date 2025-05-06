@@ -23,12 +23,29 @@ class ShopServiceImpl(
     override fun purchaseCoins(itemId: Long) {
         val item = shopItemRepository.findById(itemId)
             .orElseThrow { EntityNotFoundException("Товар с id $itemId не найден") }
-
         userService.changeCoins(item.coinsToGive)
     }
 
     @PreAuthorize("hasRole('ROLE_ADMIN')")
     override fun createShopItem(shopItem: ShopItem): ShopItem {
         return shopItemRepository.save(shopItem)
+    }
+
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    override fun createShopItems(shopItems: List<ShopItem>): List<ShopItem> {
+        return shopItemRepository.saveAll(shopItems)
+    }
+
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    override fun deleteShopItem(itemId: Long) {
+        if (!shopItemRepository.existsById(itemId)) {
+            throw EntityNotFoundException("Товар с id $itemId не найден")
+        }
+        shopItemRepository.deleteById(itemId)
+    }
+
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    override fun deleteAllShopItems() {
+        shopItemRepository.deleteAll()
     }
 }

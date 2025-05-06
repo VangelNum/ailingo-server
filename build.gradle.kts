@@ -73,6 +73,7 @@ dependencies {
 	testImplementation("org.testcontainers:junit-jupiter:$testContainers")
 
 	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+	implementation("org.jsoup:jsoup:1.15.4")
 }
 
 kotlin {

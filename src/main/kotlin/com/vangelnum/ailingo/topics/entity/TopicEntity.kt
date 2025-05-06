@@ -9,6 +9,7 @@ import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
+import kotlin.math.ceil
 
 @Entity
 @Table(name = "topic")
@@ -39,7 +40,20 @@ data class TopicEntity(
     @Column(name = "xp_complete_topic")
     var xpCompleteTopic: Int,
 
+    @Column(name = "coin_complete_topic")
+    var coinCompleteTopic: Int = calculateCoinCompleteTopic(price),
+
     @ManyToOne
     @JoinColumn(name = "creator_id")
     var creator: UserEntity? = null
-)
+) {
+    companion object {
+        fun calculateCoinCompleteTopic(price: Int): Int {
+            return ceil(price.toDouble() / 2).toInt()
+        }
+    }
+
+    fun updateCoinCompleteTopic() {
+        coinCompleteTopic = calculateCoinCompleteTopic(price)
+    }
+}

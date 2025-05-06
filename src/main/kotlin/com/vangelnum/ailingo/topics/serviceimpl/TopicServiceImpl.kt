@@ -36,7 +36,8 @@ class TopicServiceImpl(
                 systemPrompt = topicEntity.systemPrompt,
                 messageLimit = topicEntity.messageLimit,
                 isCompleted = isCompleted,
-                topicXp = topicEntity.xpCompleteTopic
+                topicXp = topicEntity.xpCompleteTopic,
+                coinCompleteTopic = topicEntity.coinCompleteTopic
             )
         }
     }
@@ -82,7 +83,10 @@ class TopicServiceImpl(
 
         updateTopicDto.name?.let { topic.name = it }
         updateTopicDto.image?.let { topic.image = it }
-        updateTopicDto.price?.let { topic.price = it }
+        updateTopicDto.price?.let {
+            topic.price = it
+            topic.updateCoinCompleteTopic()
+        }
         updateTopicDto.welcomePrompt?.let { topic.welcomePrompt = it }
         updateTopicDto.systemPrompt?.let { topic.systemPrompt = it }
         updateTopicDto.messageLimit?.let { topic.messageLimit = it }
