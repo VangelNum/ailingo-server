@@ -91,7 +91,7 @@ class ChatServiceImpl(
         val customTopic = TopicEntity(
             name = topicIdea,
             image = null,
-            price = 20,
+            price = 200,
             level = 0,
             welcomePrompt = welcomePrompt,
             systemPrompt = systemPrompt,
