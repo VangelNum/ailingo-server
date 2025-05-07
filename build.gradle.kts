@@ -1,3 +1,5 @@
+import org.springframework.boot.gradle.tasks.bundling.BootJar
+
 plugins {
 	kotlin("jvm") version "1.9.22"
 	kotlin("plugin.spring") version "1.9.22"
@@ -109,5 +111,9 @@ configure<SourceSetContainer> {
 	named("main") {
 		java.srcDir("src/main/kotlin")
 	}
+}
+
+tasks.withType<BootJar> {
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
