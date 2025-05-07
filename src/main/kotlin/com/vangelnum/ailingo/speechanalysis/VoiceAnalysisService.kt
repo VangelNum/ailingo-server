@@ -7,6 +7,7 @@ import javazoom.jl.decoder.JavaLayerException
 import org.languagetool.JLanguageTool
 import org.languagetool.rules.RuleMatch
 import org.springframework.ai.chat.client.ChatClient
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
 import org.vosk.LibVosk
@@ -62,16 +63,14 @@ private data class GptGrammarErrorResponse(
 class VoiceAnalysisService(
     private val languageTool: JLanguageTool,
     private val chatClient: ChatClient,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    @Value("\${vosk.model.path}") private val voskModelPath: String
 ) {
 
-    private val voskModelPath = "src/main/resources/vosk-model-en"
     private val voskModel: Model by lazy {
         LibVosk.setLogLevel(LogLevel.INFO)
         Model(voskModelPath)
     }
-
-    // objectMapper is now injected
 
     fun evaluateVoice(audioFile: MultipartFile): VoiceEvaluationResult {
         var transcribedText: String? = null
