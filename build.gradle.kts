@@ -74,6 +74,13 @@ dependencies {
 
 	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
 	implementation("org.jsoup:jsoup:1.15.4")
+
+	implementation("com.alphacephei:vosk:0.3.45")
+	implementation("org.languagetool:languagetool-core:6.6")
+	implementation("org.languagetool:language-en:6.6")
+
+	implementation ("javazoom:jlayer:1.0.1")
+	implementation ("org.jcodec:jcodec-javase:0.2.5")
 }
 
 kotlin {
