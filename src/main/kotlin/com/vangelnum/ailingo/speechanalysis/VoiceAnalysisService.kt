@@ -44,23 +44,25 @@ data class GrammarErrorDetail(
     val ruleId: String,
     val offset: Int,
     val length: Int,
-    val suggestedReplacements: List<String>
+    val suggestedReplacements: List<String>,
+    val erroneousText: String?
 )
 
 private data class GptGrammarErrorResponse(
     val message: String,
     val shortMessage: String?,
-    val ruleId: String? = "GPT-Grammar", // Default if not provided by GPT
-    val offset: Int?, // Nullable to handle cases where GPT might not provide it or it's invalid
-    val length: Int?, // Nullable
-    val suggestedReplacements: List<String>?
+    val ruleId: String? = "GPT-Grammar",
+    val offset: Int?,
+    val length: Int?,
+    val suggestedReplacements: List<String>?,
+    val erroneousText: String?
 )
 
 @Service
 class VoiceAnalysisService(
     private val languageTool: JLanguageTool,
-    private val chatClient: ChatClient, // Injected ChatClient
-    private val objectMapper: ObjectMapper // Injected ObjectMapper
+    private val chatClient: ChatClient,
+    private val objectMapper: ObjectMapper
 ) {
 
     private val voskModelPath = "src/main/resources/vosk-model-en"
@@ -237,6 +239,7 @@ class VoiceAnalysisService(
         try {
             val matches: List<RuleMatch> = languageTool.check(text)
             matches.forEach { match ->
+                val erroneousText = text.substring(match.fromPos, match.toPos)
                 errors.add(
                     GrammarErrorDetail(
                         message = match.message,
@@ -244,13 +247,13 @@ class VoiceAnalysisService(
                         ruleId = match.rule.id,
                         offset = match.fromPos,
                         length = match.toPos - match.fromPos,
-                        suggestedReplacements = match.suggestedReplacements
+                        suggestedReplacements = match.suggestedReplacements,
+                        erroneousText =erroneousText
                     )
                 )
             }
         } catch (e: Exception) {
             println("LanguageTool analysis error: ${e.message}")
-            // Log error, but don't let it break the flow
         }
         return errors
     }
@@ -263,7 +266,7 @@ class VoiceAnalysisService(
         Analyze the following text for errors.
         Text:
         "$text"
-
+        
         For each error found, provide the following information in a JSON list format.
         Each object in the list should have these fields:
         - "message": (string) Detailed explanation of the error.
@@ -271,11 +274,12 @@ class VoiceAnalysisService(
         - "ruleId": (string) A generic identifier for the error type, e.g., "GPT-Grammar", "GPT-Spelling", "GPT-Style".
         - "offset": (integer) The starting character position of the *erroneous segment* in the original text provided above. This is 0-indexed.
         - "length": (integer) The length of the *erroneous segment* in the original text.
+        - "erroneousText": (string) The exact text segment that is considered erroneous.
         - "suggestedReplacements": (list of strings) One or more suggestions for correction. If no direct replacement, provide an empty list or a descriptive suggestion.
-
+        
         Example of an erroneous segment: In "He go to school.", "go" is the erroneous segment.
         If the text is "My freind is good.", the error "freind" starts at offset 3 and has length 6.
-
+        
         If there are absolutely no errors found, return an empty JSON list: [].
         VERY IMPORTANT: Only output the JSON list. Do not include any other text, introductory sentences, explanations, or markdown formatting like ```json ... ``` before or after the JSON list.
         Your entire response should be parsable as a JSON list.
@@ -284,7 +288,7 @@ class VoiceAnalysisService(
         try {
             println("Sending text to ChatGPT for grammar analysis (length: ${text.length})")
             val responseContent = chatClient.prompt()
-                .user(prompt) // Use .user() for the main prompt containing the text
+                .user(prompt)
                 .call()
                 .content()
 
@@ -327,7 +331,8 @@ class VoiceAnalysisService(
                         ruleId = gptError.ruleId ?: "GPT-UnknownRule",
                         offset = gptError.offset,
                         length = gptError.length,
-                        suggestedReplacements = gptError.suggestedReplacements ?: emptyList()
+                        suggestedReplacements = gptError.suggestedReplacements ?: emptyList(),
+                        erroneousText = gptError.erroneousText
                     )
                 }
             }

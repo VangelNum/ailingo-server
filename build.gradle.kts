@@ -114,6 +114,6 @@ configure<SourceSetContainer> {
 }
 
 tasks.withType<BootJar> {
-	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
