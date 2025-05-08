@@ -261,25 +261,26 @@ class VoiceAnalysisService(
         if (text.isBlank()) return emptyList()
 
         val prompt = """
-        You are an expert English grammar and spelling checker.
-        Analyze the following text for grammatical and spelling errors. **Exclude standard capitalization issues, such as the first letter of a sentence, proper nouns (like names and places), or the pronoun 'I'.** Focus on other grammatical structures, word usage, punctuation (excluding basic sentence start capitalization), and spelling.
+        You are an expert English grammar, spelling, **style, and clarity** checker.
+        Analyze the following text for grammatical and spelling errors, **as well as issues related to clarity and style**. **Exclude standard capitalization issues, such as the first letter of a sentence, proper nouns (like names and places), or the pronoun 'I'. Furthermore, ignore errors related to comma usage.** Focus on other grammatical structures, word usage, punctuation (excluding basic sentence start capitalization and comma usage), spelling, **clarity (e.g., wordiness, awkward phrasing, ambiguity, run-on sentences if not stylistically justified), and style (e.g., inappropriate tone or level of formality for general communication, repetitiveness, poor word choice, overuse of passive voice where active would be stronger, or clichés).**
         Text:
         "$text"
-
-        For each error found, provide the following information in a JSON list format.
+        
+        For each error or issue found, provide the following information in a JSON list format.
         Each object in the list should have these fields:
-        - "message": (string) Detailed explanation of the error.
-        - "shortMessage": (string, optional) Brief error type (e.g., 'Spelling', 'Verb tense'). If not applicable, this can be omitted or null.
-        - "ruleId": (string) A generic identifier for the error type, e.g., "GPT-Grammar", "GPT-Spelling", "GPT-Style".
-        - "offset": (integer) The starting character position of the *erroneous segment* in the original text provided above. This is 0-indexed.
-        - "length": (integer) The length of the *erroneous segment* in the original text.
-        - "erroneousText": (string) The exact text segment that is considered erroneous.
-        - "suggestedReplacements": (list of strings) One or more suggestions for correction. If no direct replacement, provide an empty list or a descriptive suggestion.
-
+        - "message": (string) Detailed explanation of the error or issue.
+        - "shortMessage": (string, optional) Brief error type (e.g., 'Spelling', 'Verb tense', 'Clarity', 'Style', 'Wordiness', 'Awkward Phrasing'). If not applicable, this can be omitted or null.
+        - "ruleId": (string) A generic identifier for the error type, e.g., "GPT-Grammar", "GPT-Spelling", "GPT-Style", "GPT-Clarity", "GPT-WordChoice".
+        - "offset": (integer) The starting character position of the *problematic segment* in the original text provided above. This is 0-indexed. For style/clarity issues that span a whole sentence, you can mark the beginning of the sentence.
+        - "length": (integer) The length of the *problematic segment* in the original text. For style/clarity issues that span a whole sentence, this can be the length of the sentence.
+        - "erroneousText": (string) The exact text segment that is considered problematic.
+        - "suggestedReplacements": (list of strings) One or more suggestions for correction. If no direct replacement is suitable, especially for stylistic or clarity issues, provide an empty list or a descriptive suggestion (e.g., 'Consider rephrasing for conciseness', 'This sentence could be more active', 'Rephrase to avoid ambiguity').
+        
         Example of an erroneous segment: In "He go to school.", "go" is the erroneous segment.
         If the text is "My freind is good.", the error "freind" starts at offset 3 and has length 6.
-
-        If there are absolutely no errors found, return an empty JSON list: [].
+        A stylistic issue like "The report was completed by the team in a timely manner" might identify "The report was completed by the team" as problematic, suggesting "The team completed the report" for better active voice.
+        
+        If there are absolutely no errors or issues found, return an empty JSON list: [].
         VERY IMPORTANT: Only output the JSON list. Do not include any other text, introductory sentences, explanations, or markdown formatting like ```json ... ``` before or after the JSON list.
         Your entire response should be parsable as a JSON list.
         """.trimIndent()
