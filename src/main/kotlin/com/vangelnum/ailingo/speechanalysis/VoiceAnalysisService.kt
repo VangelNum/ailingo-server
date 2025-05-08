@@ -262,10 +262,10 @@ class VoiceAnalysisService(
 
         val prompt = """
         You are an expert English grammar and spelling checker.
-        Analyze the following text for errors.
+        Analyze the following text for grammatical and spelling errors. **Exclude standard capitalization issues, such as the first letter of a sentence, proper nouns (like names and places), or the pronoun 'I'.** Focus on other grammatical structures, word usage, punctuation (excluding basic sentence start capitalization), and spelling.
         Text:
         "$text"
-        
+
         For each error found, provide the following information in a JSON list format.
         Each object in the list should have these fields:
         - "message": (string) Detailed explanation of the error.
@@ -275,10 +275,10 @@ class VoiceAnalysisService(
         - "length": (integer) The length of the *erroneous segment* in the original text.
         - "erroneousText": (string) The exact text segment that is considered erroneous.
         - "suggestedReplacements": (list of strings) One or more suggestions for correction. If no direct replacement, provide an empty list or a descriptive suggestion.
-        
+
         Example of an erroneous segment: In "He go to school.", "go" is the erroneous segment.
         If the text is "My freind is good.", the error "freind" starts at offset 3 and has length 6.
-        
+
         If there are absolutely no errors found, return an empty JSON list: [].
         VERY IMPORTANT: Only output the JSON list. Do not include any other text, introductory sentences, explanations, or markdown formatting like ```json ... ``` before or after the JSON list.
         Your entire response should be parsable as a JSON list.
@@ -343,9 +343,6 @@ class VoiceAnalysisService(
         }
     }
 
-    // --- Other existing methods from your VoiceAnalysisService ---
-    // isFormatCompatible, processAudio, extractTextFromJson, extractWordConfidences, convertMp3ToWav
-    // should remain as they were in your original code.
     private fun isFormatCompatible(sourceFormat: AudioFormat, targetFormat: AudioFormat): Boolean {
         return sourceFormat.encoding == targetFormat.encoding &&
                 sourceFormat.sampleRate == targetFormat.sampleRate &&
@@ -384,7 +381,6 @@ class VoiceAnalysisService(
             objectMapper.readTree(jsonResult).get("text")?.asText()
         } catch (e: Exception) {
             println("Error extracting 'text' from JSON: ${e.message}")
-            // Fallback regex if primary parsing fails or "text" is not at the top level as expected
             "\"text\"\\s*:\\s*\"(.*?)\"".toRegex().find(jsonResult)?.groups?.get(1)?.value
         }
     }
@@ -431,7 +427,6 @@ class VoiceAnalysisService(
             if (!tempWavFile.exists() || tempWavFile.length() == 0L) {
                 throw IOException("WAV file was not created or is empty after conversion from MP3.")
             }
-            // Use BufferedInputStream for reading the converted WAV file
             return AudioSystem.getAudioInputStream(BufferedInputStream(tempWavFile.inputStream()))
         } catch (e: JavaLayerException) {
             println("JLayerException during MP3 to WAV conversion: ${e.message}")
